@@ -1,0 +1,1993 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Pipeline pelo terminal dos Desafios 1 (Parte 2), 1, 3 e 4: aws login, bia-dev por script, build e push do WSL, ECS com Kiro, front no S3 e porteiro com túneis SSM.">
+<meta name="color-scheme" content="light dark">
+<title>Desafios 1 a 4 pelo terminal</title>
+<script>
+  /* Aplica o tema salvo antes da primeira pintura: no rodape, quem escolheu
+     escuro veria um lampejo branco a cada carregamento. */
+  (function () {
+    try {
+      var t = localStorage.getItem("desafio1-guia-tema");
+      if (t === "dark" || t === "light") {
+        document.documentElement.setAttribute("data-theme", t);
+      }
+    } catch (e) {}
+  })();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+
+<style>
+  :root {
+    --bg:        #E9EDEF;
+    --surface:   #FFFFFF;
+    --surface-2: #F3F6F7;
+    --ink:       #0E1619;
+    --ink-2:     #44555C;
+    --ink-3:     #6F8188;
+    --line:      #D3DBDE;
+    --line-2:    #E4EAEC;
+    --accent:    #0A6A72;
+    --accent-2:  #08535A;
+    --accent-soft:#DBECED;
+    --warn:      #A05712;
+    --warn-soft: #FAEDDC;
+    --ok:        #1E6F45;
+    --ok-soft:   #DEF0E6;
+    --stop:      #A13327;
+    --stop-soft: #FAE3E0;
+    --term-bg:   #0D1619;
+    --term-line: #1E2E34;
+    --term-ink:  #D6E3E7;
+    --term-dim:  #7C949B;
+    --shadow:    0 1px 2px rgba(14,22,25,.05), 0 8px 24px -16px rgba(14,22,25,.28);
+    --radius: 10px;
+    --maxw: 1180px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:        #0B1214;
+      --surface:   #121B1E;
+      --surface-2: #162126;
+      --ink:       #E7EFF1;
+      --ink-2:     #A8BBC1;
+      --ink-3:     #7C9199;
+      --line:      #24343A;
+      --line-2:    #1C282D;
+      --accent:    #5AC6CE;
+      --accent-2:  #8BDBE1;
+      --accent-soft:#10333A;
+      --warn:      #E2A75E;
+      --warn-soft: #2C2216;
+      --ok:        #6FCB95;
+      --ok-soft:   #13291D;
+      --stop:      #EA8B7D;
+      --stop-soft: #2E1A17;
+      --term-bg:   #08100F;
+      --term-line: #1B2A2F;
+      --shadow:    0 1px 2px rgba(0,0,0,.4), 0 10px 28px -18px rgba(0,0,0,.8);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg:        #0B1214;
+    --surface:   #121B1E;
+    --surface-2: #162126;
+    --ink:       #E7EFF1;
+    --ink-2:     #A8BBC1;
+    --ink-3:     #7C9199;
+    --line:      #24343A;
+    --line-2:    #1C282D;
+    --accent:    #5AC6CE;
+    --accent-2:  #8BDBE1;
+    --accent-soft:#10333A;
+    --warn:      #E2A75E;
+    --warn-soft: #2C2216;
+    --ok:        #6FCB95;
+    --ok-soft:   #13291D;
+    --stop:      #EA8B7D;
+    --stop-soft: #2E1A17;
+    --term-bg:   #08100F;
+    --term-line: #1B2A2F;
+    --shadow:    0 1px 2px rgba(0,0,0,.4), 0 10px 28px -18px rgba(0,0,0,.8);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: "Archivo", ui-sans-serif, system-ui, sans-serif;
+    text-wrap: balance;
+    margin: 0;
+    letter-spacing: -0.015em;
+  }
+
+  code, kbd, pre, .mono { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px;
+  }
+
+  /* ---------- barra superior ---------- */
+  .topbar {
+    position: sticky; top: 0; z-index: 40;
+    background: color-mix(in srgb, var(--surface) 90%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
+  }
+  .topbar-in {
+    max-width: var(--maxw); margin: 0 auto; padding: 10px 24px;
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  }
+  .topbar-id { display: flex; align-items: baseline; gap: 10px; margin-right: auto; }
+  .topbar-id strong { font-family: "Archivo", sans-serif; font-size: 15px; font-weight: 700; }
+  .topbar-id span { font-size: 12px; color: var(--ink-3); font-family: "IBM Plex Mono", monospace; }
+
+  .prog { display: flex; align-items: center; gap: 10px; }
+  .prog-track { width: 190px; height: 6px; border-radius: 99px; background: var(--line); overflow: hidden; }
+  .prog-fill { height: 100%; width: 0%; background: var(--accent); transition: width .25s ease; }
+  .prog-num {
+    font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 500;
+    color: var(--ink-2); font-variant-numeric: tabular-nums; min-width: 78px;
+  }
+  .btn-ghost {
+    font-family: "IBM Plex Mono", monospace; font-size: 11px; letter-spacing: .04em;
+    text-transform: uppercase; color: var(--ink-3); background: none;
+    border: 1px solid var(--line); border-radius: 6px; padding: 5px 9px; cursor: pointer;
+  }
+  .btn-ghost:hover { color: var(--ink); border-color: var(--ink-3); }
+
+  /* ---------- estrutura ---------- */
+  .shell { max-width: var(--maxw); margin: 0 auto; padding: 0 24px 96px; display: grid; gap: 40px; grid-template-columns: 218px minmax(0,1fr); }
+  @media (max-width: 940px) { .shell { grid-template-columns: 1fr; gap: 0; } }
+
+  nav.toc { position: sticky; top: 72px; align-self: start; padding: 32px 0; max-height: calc(100vh - 90px); overflow-y: auto; }
+  @media (max-width: 940px) { nav.toc { display: none; } }
+  .toc-label { font-family: "IBM Plex Mono", monospace; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 12px; }
+  .toc a {
+    display: flex; gap: 9px; align-items: baseline; padding: 5px 0;
+    color: var(--ink-2); text-decoration: none; font-size: 13.5px; line-height: 1.35;
+    border-left: 2px solid transparent; padding-left: 10px; margin-left: -12px;
+  }
+  .toc a b { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--ink-3); font-weight: 500; }
+  .toc a:hover { color: var(--ink); }
+  .toc a.on { color: var(--accent); border-left-color: var(--accent); font-weight: 500; }
+  .toc a.on b { color: var(--accent); }
+  .toc a.done b::after { content: "✓"; margin-left: 4px; color: var(--ok); }
+
+  main { padding: 32px 0 0; min-width: 0; }
+
+  /* ---------- abertura ---------- */
+  .hero { padding: 26px 0 34px; border-bottom: 1px solid var(--line); margin-bottom: 40px; }
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace; font-size: 11px; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 14px;
+  }
+  h1 { font-size: clamp(30px, 4.4vw, 44px); line-height: 1.08; font-weight: 700; }
+  .lede { font-size: 17px; color: var(--ink-2); max-width: 64ch; margin-top: 16px; }
+  .facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+  .fact {
+    font-family: "IBM Plex Mono", monospace; font-size: 11.5px; color: var(--ink-2);
+    background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 5px 9px;
+  }
+  .fact b { color: var(--ink-3); font-weight: 500; }
+
+  /* ---------- fases ---------- */
+  .phase { margin: 0 0 60px; scroll-margin-top: 76px; }
+  .phase-head { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 18px; }
+  .phase-n {
+    font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 600;
+    color: var(--accent); background: var(--accent-soft); border-radius: 6px;
+    padding: 6px 9px; line-height: 1; margin-top: 5px; white-space: nowrap;
+  }
+  .phase-head h2 { font-size: clamp(21px, 2.6vw, 27px); font-weight: 600; }
+  .phase-head p { margin: 6px 0 0; color: var(--ink-2); font-size: 15px; max-width: 68ch; }
+  .phase-count {
+    margin-left: auto; font-family: "IBM Plex Mono", monospace; font-size: 11px;
+    color: var(--ink-3); white-space: nowrap; padding-top: 9px; font-variant-numeric: tabular-nums;
+  }
+  .phase-count.full { color: var(--ok); }
+
+  /* ---------- passo ---------- */
+  .step {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 20px 22px; margin-bottom: 14px; box-shadow: var(--shadow); scroll-margin-top: 76px;
+  }
+  .step-top { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+  .step-id {
+    font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 600;
+    color: var(--ink-3); font-variant-numeric: tabular-nums;
+    text-decoration: none; transition: color .12s;
+  }
+  a.step-id:hover, a.step-id:focus-visible { color: var(--accent); }
+  .step h3 { font-size: 17px; font-weight: 600; }
+  .where {
+    font-family: "IBM Plex Mono", monospace; font-size: 10px; letter-spacing: .07em;
+    text-transform: uppercase; padding: 3px 7px; border-radius: 4px; margin-left: auto; white-space: nowrap;
+  }
+  .w-wsl { background: var(--accent-soft); color: var(--accent); }
+  .w-ec2 { background: var(--warn-soft); color: var(--warn); }
+  .w-web { background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--line); }
+  .w-console { background: var(--warn-soft); color: var(--warn); }
+  .w-ssm { background: var(--ok-soft); color: var(--ok); }
+  .w-kiro { background: var(--stop-soft); color: var(--stop); }
+  .stage { margin: 8px 0 36px; padding: 18px 22px; border-radius: var(--radius); background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); scroll-margin-top: 76px; }
+  .stage > span { display: block; font-family: "IBM Plex Mono", monospace; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+  .stage > b { display: block; font-family: "Archivo", sans-serif; font-size: clamp(20px, 2.4vw, 25px); margin-top: 4px; }
+  .stage > p { margin: 6px 0 0; color: var(--ink-2); font-size: 15px; max-width: 72ch; }
+  .arch { margin: -20px 0 36px; }
+  .arch-cap { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); padding: 14px 20px 0; }
+  .arch pre { padding-top: 10px; }
+  .arch .d-done { color: var(--ok); }
+  .arch .d-now { color: var(--warn); font-weight: 600; }
+  .arch pre.arch-ch { border-top: 1px dashed var(--line); font-size: 12.5px; line-height: 1.55; }
+  .arch .d-todo { color: var(--ink-3); opacity: .5; }
+  .arch-leg { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 0 20px 14px; font-family: "IBM Plex Mono", monospace; font-size: 11.5px; }
+  .arch-leg .d-now { padding: 0 4px; }  .toc-group { font-family: "IBM Plex Mono", monospace; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin: 16px 0 4px; }
+  .step > p { color: var(--ink-2); font-size: 14.5px; margin: 8px 0 0; max-width: 72ch; }
+
+  /* ---------- comandos ---------- */
+  .cmd { position: relative; margin: 14px 0 0; }
+  .cmd-label, .out-label {
+    font-family: "IBM Plex Mono", monospace; font-size: 10px; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--ink-3); margin-bottom: 6px; display: block;
+  }
+  pre {
+    margin: 0; padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+    font-size: 13px; line-height: 1.62; tab-size: 2;
+  }
+  .cmd pre { background: var(--term-bg); color: var(--term-ink); border: 1px solid var(--term-line); }
+  .cmd pre .p { color: #6FCB95; user-select: none; }
+  .cmd pre .c { color: var(--term-dim); }
+  .copy {
+    position: absolute; top: 22px; right: 8px; font-family: "IBM Plex Mono", monospace;
+    font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
+    background: rgba(255,255,255,.07); color: #9FB6BC; border: 1px solid rgba(255,255,255,.13);
+    border-radius: 5px; padding: 4px 8px; cursor: pointer; opacity: 0; transition: opacity .15s;
+  }
+  .cmd:hover .copy, .copy:focus-visible { opacity: 1; }
+  .copy.ok { color: #6FCB95; border-color: #6FCB95; opacity: 1; }
+  .out { margin-top: 14px; }
+  .out pre {
+    background: var(--surface-2); color: var(--ink-2);
+    border: 1px solid var(--line-2); border-left: 3px solid var(--ink-3);
+  }
+  .out.good pre { border-left-color: var(--ok); }
+  .out.bad pre { border-left-color: var(--stop); }
+  .out.clicks pre { border-left-color: var(--warn); color: var(--ink); }
+  p code, li code, td code {
+    background: var(--surface-2); border: 1px solid var(--line-2); border-radius: 4px;
+    padding: 1px 5px; font-size: .875em; color: var(--ink);
+  }
+
+  /* ---------- checklist ---------- */
+  .check { margin: 16px 0 0; padding: 14px 16px; background: var(--surface-2); border-radius: 8px; border: 1px solid var(--line-2); }
+  .check-label { font-family: "IBM Plex Mono", monospace; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 8px; }
+  .check ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+  .check li label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+  .check input[type=checkbox] {
+    appearance: none; -webkit-appearance: none; flex: 0 0 auto;
+    width: 17px; height: 17px; margin: 3px 0 0; border: 1.5px solid var(--ink-3);
+    border-radius: 4px; background: var(--surface); cursor: pointer; position: relative; transition: .12s;
+  }
+  .check input[type=checkbox]:hover { border-color: var(--accent); }
+  .check input[type=checkbox]:checked { background: var(--accent); border-color: var(--accent); }
+  .check input[type=checkbox]:checked::after {
+    content: ""; position: absolute; left: 5px; top: 1.5px; width: 4px; height: 9px;
+    border: solid var(--surface); border-width: 0 2px 2px 0; transform: rotate(43deg);
+  }
+  .check label span { font-size: 14.5px; color: var(--ink-2); line-height: 1.45; }
+  .check input:checked + span { color: var(--ink-3); text-decoration: line-through; text-decoration-color: var(--line); }
+
+  /* ---------- avisos ---------- */
+  .note { border-radius: 8px; padding: 13px 16px; margin: 14px 0 0; font-size: 14.5px; border: 1px solid; }
+  .note > b { display: block; font-family: "Archivo", sans-serif; font-size: 13px; letter-spacing: .01em; margin-bottom: 3px; }
+  .note p { margin: 0; }
+  .note p + p { margin-top: 7px; }
+  .note ul, .note ol { margin: 6px 0 7px; padding-left: 20px; }
+  .note li b { display: inline; font-family: inherit; font-size: inherit; margin: 0; }
+  .note li + li { margin-top: 3px; }
+  .n-warn { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 35%, transparent); color: var(--ink); }
+  .n-warn > b { color: var(--warn); }
+  .n-tip  { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 32%, transparent); color: var(--ink); }
+  .n-tip > b { color: var(--accent); }
+  .n-key  { background: var(--stop-soft); border-color: color-mix(in srgb, var(--stop) 32%, transparent); color: var(--ink); }
+  .n-key > b { color: var(--stop); }
+
+  details.fallback { margin-top: 14px; border: 1px dashed var(--line); border-radius: 8px; padding: 0 14px; background: var(--surface-2); }
+  details.fallback summary { cursor: pointer; padding: 11px 0; font-size: 14px; font-weight: 500; color: var(--ink-2); }
+  details.fallback[open] summary { border-bottom: 1px solid var(--line-2); margin-bottom: 12px; }
+  details.fallback > *:last-child { margin-bottom: 14px; }
+
+  /* ---------- tabelas ---------- */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); margin-top: 16px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 520px; }
+  th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line-2); vertical-align: top; }
+  th {
+    font-family: "IBM Plex Mono", monospace; font-size: 10.5px; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--ink-3); font-weight: 500; background: var(--surface-2);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+
+  .ascii { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); margin-top: 16px; }
+  .ascii pre { background: none; color: var(--ink-2); font-size: 12px; line-height: 1.5; padding: 20px; }
+
+  footer { max-width: var(--maxw); margin: 0 auto; padding: 28px 24px 60px; border-top: 1px solid var(--line); color: var(--ink-3); font-size: 13px; }
+  footer p { margin: 0 0 6px; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+  @media (max-width: 620px) {
+    .shell, .topbar-in, footer { padding-left: 16px; padding-right: 16px; }
+    .step { padding: 16px; }
+    .where { margin-left: 0; }
+    .prog-track { width: 110px; }
+  }
+  /* ---------- impressao ---------- */
+  @media print {
+    /* Paleta clara forcada: quem le no escuro nao deve imprimir paginas pretas. */
+    :root, :root[data-theme="dark"], :root[data-theme="light"] {
+      --bg: #FFFFFF; --surface: #FFFFFF; --surface-2: #F5F7F8;
+      --ink: #000000; --ink-2: #263338; --ink-3: #55666C;
+      --line: #B9C4C8; --line-2: #DDE4E6;
+      --accent: #0A6A72; --accent-2: #08535A; --accent-soft: #EDF4F5;
+      --warn: #7A430E; --warn-soft: #FBF3E9; --ok: #165634; --ok-soft: #EDF6F1;
+      --stop: #7D2820; --stop-soft: #FBEEEC;
+      --term-bg: #F2F5F6; --term-line: #C8D2D5; --term-ink: #0E1619; --term-dim: #55666C;
+      --shadow: none;
+    }
+    .topbar, nav.toc, .copy, #tema, #reset { display: none !important; }
+    .shell { display: block; max-width: none; padding: 0; }
+    body { background: #fff; }
+    .step, .cmd, .out, .note, .check, .ascii, .tablewrap, details {
+      break-inside: avoid; page-break-inside: avoid;
+    }
+    h2, h3, .step-top, .phase-head { break-after: avoid; page-break-after: avoid; }
+    .phase { margin-bottom: 24px; }
+    .step { box-shadow: none; border-color: #B9C4C8; }
+    pre { white-space: pre-wrap; word-wrap: break-word; }
+    a { color: inherit; text-decoration: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <div class="topbar-id">
+      <strong>Desafios 1 → 4</strong>
+      <span>pipeline pelo terminal · us-east-1</span>
+    </div>
+    <div class="prog">
+      <span class="prog-num" id="progNum">0 / 0</span>
+      <div class="prog-track"><div class="prog-fill" id="progFill"></div></div>
+    </div>
+    <button class="btn-ghost" id="tema" type="button">Tema: claro</button>
+    <button class="btn-ghost" id="reset" type="button">Limpar progresso</button>
+  </div>
+</div>
+
+<div class="shell">
+  <nav class="toc" id="toc" aria-label="Fases do pipeline">
+    <div class="toc-label">Roteiro</div>
+  </nav>
+
+  <main>
+
+    <header class="hero">
+      <div class="eyebrow">Desafio Labs 3.0 · Preparação · Desafios 1 (Parte 2), 1, 3 e 4 · só terminal</div>
+      <h1>Do zero ao porteiro, pelo WSL: um pipeline para os quatro desafios</h1>
+      <p class="lede">
+        Roteiro de execução pelo <b>terminal local</b>, na <b>VPC default</b>, como nas aulas, reaproveitando os scripts do projeto
+        <code>bia/</code> e os seus scripts em <code>Desafios/</code>. Cada passo traz onde executar, o comando, o que ele resolve,
+        a resposta esperada e um checklist. Os conceitos e o Console passo a passo estão no guia híbrido
+        (<span class="mono">guia-desafio-preparatorio-1-hibrido.html</span>).
+      </p>
+      <div class="facts">
+        <span class="fact"><b>região</b> us-east-1</span>
+        <span class="fact"><b>usuário</b> formacao_aws</span>
+        <span class="fact"><b>VPC</b> default</span>
+        <span class="fact"><b>EC2</b> bia-dev · porteiro-bia</span>
+        <span class="fact"><b>RDS</b> bia</span>
+        <span class="fact"><b>ECS</b> cluster-bia · service-bia</span>
+        <span class="fact"><b>S3</b> &lt;NOME_UNICO_DO_BUCKET&gt;</span>
+      </div>
+    </header>
+
+    <section class="phase" id="p-mapa" data-group="Fundação" data-title="O pipeline inteiro">
+      <div class="phase-head">
+        <span class="phase-n">MAPA</span>
+        <div>
+          <h2>Entregas, ordem e o que obrigatoriamente sai do terminal</h2>
+          <p>Cada desafio usa o que o anterior deixou pronto: <code>bia-dev</code> e ECR → ECS + RDS → site no S3 falando com o ECS → porteiro com túneis para o RDS e a BIA.</p>
+        </div>
+      </div>
+
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Desafio</th><th>Entregas</th><th>Fases</th></tr></thead>
+          <tbody>
+            <tr><td>Fundação</td><td>WSL pronto, <code>formacao_aws</code> com <code>aws login</code></td><td>F0–F1</td></tr>
+            <tr><td>Desafio 1 (Parte 2)</td><td>Dia 1: <code>bia-dev</code> por script · permissões IAM no usuário · testar o ECR. Dia 2: build e push do WSL</td><td>F2–F6</td></tr>
+            <tr><td>Desafio 1</td><td>Print da BIA na porta 80 com e-mail e botão alterado · diagnóstico do Kiro</td><td>F7–F11</td></tr>
+            <tr><td>Desafio 3</td><td>Bucket com site · script com a URL da API por argumento · sync · registro salvo pelo site</td><td>F12–F13</td></tr>
+            <tr><td>Desafio 4</td><td>Scripts: lançar o porteiro (zona b), túnel RDS 5433 + INSERT, túnel BIA 3002, parar</td><td>F14–F15</td></tr>
+            <tr><td>Encerramento</td><td>Pausar · apagar tudo</td><td>F16 · anexos</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note n-warn">
+        <b>O que obrigatoriamente sai do terminal</b>
+        <ul>
+          <li><b>Criar o usuário <code>formacao_aws</code> e dar permissões a ele</b> (F1, F2, F8, F12): um usuário não se autoriza sozinho. Quem faz isso é o Console, com o usuário administrador.</li>
+          <li><b>Cluster ECS com EC2</b> (F9): o assistente do Console monta um stack do CloudFormation (Launch Template, ASG, capacity provider, role). Pela CLI seriam várias peças à mão.</li>
+          <li><b>Fork e chave SSH</b> no GitHub (F4), <b>login do Kiro</b> (F7) e os <b>prints</b> (F11, F13, F15).</li>
+        </ul>
+      </div>
+
+      <div class="note n-tip">
+        <b>Etiquetas</b>
+        <p><b>WSL</b> = terminal Ubuntu local (<code>formacao_aws</code>) · <b>BIA-DEV</b> = dentro da EC2 pela sessão SSM (<code>role-acesso-ssm</code>) · <b>KIRO</b> = no <code>kiro-cli chat</code> · <b>WSL · T2/T3</b> = abas extras dos túneis · <b>CONSOLE</b> / <b>WEB</b> = navegador. Nas aulas, alguns comandos rodaram no CloudShell; aqui tudo roda no WSL.</p>
+      </div>
+    </section>
+
+    <!-- ================================================================ F0 -->
+    <section class="phase" id="p0" data-group="Fundação" data-title="WSL pronto">
+      <div class="phase-head">
+        <span class="phase-n">FASE 0</span>
+        <div>
+          <h2>A VM: ferramentas, Docker e o projeto clonado</h2>
+          <p>AWS CLI, plugin do SSM, Node (Desafio 3), Docker (Desafio 1 Parte 2) e cliente do PostgreSQL (Desafio 4).</p>
+        </div>
+        <span class="phase-count" data-count-for="p0"></span>
+      </div>
+
+      <div class="step" id="passo-0-1">
+        <div class="step-top"><a class="step-id" href="#passo-0-1">0.1</a><h3>Conferir e instalar as ferramentas</h3><span class="where w-wsl">WSL</span></div>
+        <p><kbd>Win</kbd>+<kbd>R</kbd> › <code>wt</code> › seta ao lado do <b>+</b> › <b>Ubuntu</b>.</p>
+        <div class="cmd"><span class="cmd-label">Conferir</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>aws --version; session-manager-plugin --version; node -v; psql --version; git --version
+<span class="p">$ </span>docker ps</pre></div>
+        <details class="fallback">
+          <summary>Instalar o que faltar</summary>
+          <div class="cmd"><span class="cmd-label">Comandos</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>sudo apt-get update &amp;&amp; sudo apt-get install -y curl unzip postgresql-client
+<span class="p">$ </span>curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip &amp;&amp; unzip -q /tmp/awscliv2.zip -d /tmp &amp;&amp; sudo /tmp/aws/install
+<span class="p">$ </span>curl -o /tmp/smp.deb "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" &amp;&amp; sudo dpkg -i /tmp/smp.deb
+<span class="p">$ </span>curl -sL https://deb.nodesource.com/setup_24.x -o /tmp/ns.sh &amp;&amp; sudo bash /tmp/ns.sh &amp;&amp; sudo apt-get install -y nodejs</pre></div>
+          <p><code>docker ps</code> falhando: no Docker Desktop do Windows, <b>Settings › Resources › WSL Integration</b>, ligue o Ubuntu e clique em <b>Apply &amp; restart</b>.</p>
+        </details>
+        <div class="check"><div class="check-label">Checklist</div><ul>
+          <li><label><input type="checkbox"><span>Todas respondem, e <code>docker ps</code> funciona</span></label></li>
+        </ul></div>
+      </div>
+
+      <div class="step" id="passo-0-2">
+        <div class="step-top"><a class="step-id" href="#passo-0-2">0.2</a><h3>Clonar o projeto no disco do Linux</h3><span class="where w-wsl">WSL</span></div>
+        <p>O clone no Linux vem em <b>LF</b>. A cópia do projeto no disco do Windows está em CRLF e quebra o Bash (<code>$'\r': command not found</code>). É deste clone que saem os scripts do projeto, o build do Dia 2 e o build do Desafio 3.</p>
+        <div class="cmd"><span class="cmd-label">Comando</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>git clone https://github.com/henrylle/bia ~/bia &amp;&amp; file ~/bia/scripts/lancar_ec2_zona_a.sh</pre></div>
+        <div class="out good"><span class="out-label">Resposta esperada (sem "CRLF")</span><pre>/home/usuario/bia/scripts/lancar_ec2_zona_a.sh: Unicode text, UTF-8 text</pre></div>
+        <div class="check"><div class="check-label">Checklist</div><ul>
+          <li><label><input type="checkbox"><span>Projeto em <code>~/bia</code></span></label></li>
+        </ul></div>
+      </div>
+    </section>
+
+    <!-- ================================================================ F1 -->
+    <section class="phase" id="p1" data-group="Fundação" data-title="Usuário IAM e aws login">
+      <div class="phase-head">
+        <span class="phase-n">FASE 1</span>
+        <div>
+          <h2>Usuário <code>formacao_aws</code> e <code>aws login</code></h2>
+          <p>Credenciais temporárias (12 h, renovadas a cada 15 min) no lugar de access keys de longa duração.</p>
+        </div>
+        <span class="phase-count" data-count-for="p1"></span>
+      </div>
+
+      <div class="step" id="passo-1-1">
+        <div class="step-top"><a class="step-id" href="#passo-1-1">1.1</a><h3>Criar o usuário (limitação: Console, administrador)</h3><span class="where w-console">CONSOLE</span></div>
+        <div class="out clicks"><span class="out-label">Console ›</span><pre>IAM  &gt;  Users  &gt;  Create user  &gt;  formacao_aws
+  marcar  Provide user access to the AWS Management Console  ·  senha forte
+  Attach policies directly:  SignInLocalDevelopmentAccess · AmazonSSMFullAccess · AmazonEC2ContainerRegistryFullAccess
+  Create user   (sign-in URL: https://&lt;ACCOUNT_ID&gt;.signin.aws.amazon.com/console)</pre></div>
+        <p><code>SignInLocalDevelopmentAccess</code> é o que permite o <code>aws login</code> gerar credenciais para o terminal. As outras permissões chegam depois, cada uma no primeiro <code>AccessDenied</code> (F2, F8, F12).</p>
+        <div class="check"><div class="check-label">Checklist</div><ul>
+          <li><label><input type="checkbox"><span>Usuário criado com as três policies e login testado no Console</span></label></li>
+        </ul></div>
+      </div>
+
+      <div class="step" id="passo-1-2">
+        <div class="step-top"><a class="step-id" href="#passo-1-2">1.2</a><h3>Login, profile padrão e arquivo de variáveis</h3><span class="where w-wsl">WSL</span></div>
+        <div class="cmd"><span class="cmd-label">Comando — troque o nome do bucket (global, minúsculas)</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>aws login --profile formacao_aws
+<span class="p">$ </span>mkdir -p ~/DESAFIO1 &amp;&amp; cat &gt; ~/DESAFIO1/desafio1.sh &lt;&lt;'FIM'
+export AWS_PROFILE=formacao_aws
+export AWS_DEFAULT_REGION=us-east-1
+export AWS_PAGER=""
+export BIA_DIR=$HOME/bia
+export BIA_DEV=bia-dev
+export RDS_ID=bia
+export ECR_REPO=bia
+export CLUSTER=cluster-bia
+export SERVICE=service-bia
+export TASK_FAMILY=task-def-bia
+export BUCKET_NAME=&lt;NOME_UNICO_DO_BUCKET&gt;
+export PORTEIRO=porteiro-bia
+export PORTA_RDS_LOCAL=5433
+export PORTA_BIA_LOCAL=3002
+FIM
+<span class="p">$ </span>source ~/DESAFIO1/desafio1.sh
+<span class="p">$ </span>aws sts get-caller-identity --query Arn --output text</pre></div>
+        <div class="out good"><span class="out-label">Resposta esperada</span><pre>arn:aws:iam::&lt;ACCOUNT_ID&gt;:user/formacao_aws</pre></div>
+        <p>Rode o <code>cat &gt;</code> uma vez só (ele sobrescreve). Em toda aba nova: <code>source ~/DESAFIO1/desafio1.sh</code>. Os scripts do projeto não passam <code>--profile</code>; sem o <code>AWS_PROFILE</code>, eles usariam o <code>default</code> e "não achariam" nada. Com <code>ExpiredToken</code>, repita o <code>aws login</code>.</p>
+        <div class="check"><div class="check-label">Checklist</div><ul>
+          <li><label><input type="checkbox"><span>ARN termina em <code>user/formacao_aws</code></span></label></li>
+        </ul></div>
+      </div>
+    </section>
+
+    <div class="stage" id="etapa-d1p2"><span>Desafio 1 · Parte 2</span><b>Dia 1 e Dia 2 a partir da sua VM</b><p>Lançar a <code>bia-dev</code> por script, dar as permissões IAM ao usuário em vez da role, testar o ECR, e build + push do WSL.</p></div>
+      <div class="ascii arch"><div class="arch-cap">Arquitetura: o que já existe, o que este desafio cria e o que vem depois</div><pre>
+<span class="d-done">+-- SUA VM · WSL 2 (Ubuntu) -----------------+   </span>+-- NAVEGADOR -----------------+  +-- GITHUB -------------------+
+<span class="d-done">| aws cli v2 · session-manager-plugin        |   </span>| <span class="d-todo">http://IP_ECS (porta 80)     </span>|  | <span class="d-done">henrylle/bia (clone no WSL) </span>|
+<span class="d-done">| usuário IAM formacao_aws (aws login)       |   </span>| <span class="d-todo">http://bucket.s3-website     </span>|  | <span class="d-now">fork · chave SSH da bia-dev </span>|
+<span class="d-done">| </span><span class="d-now">docker build + push -&gt; ECR (Dia 2)         </span><span class="d-done">|   </span>| <span class="d-todo">http://localhost:3002        </span>|  | <span class="d-todo">commit do botão (git push)  </span>|
+<span class="d-done">| </span><span class="d-now">lancar_ec2_zona_a.sh -&gt; EC2 bia-dev        </span><span class="d-done">|   </span>+------------------------------+  +-----------------------------+
+<span class="d-done">| </span><span class="d-todo">deploy.sh (react.sh + s3.sh) -&gt; S3         </span><span class="d-done">|                  </span>|
+<span class="d-done">| </span><span class="d-todo">01..04 porteiro · túneis 5433 / 3002       </span><span class="d-done">|                  </span>|
+<span class="d-done">+--------------------------------------------+                  </span>v  :80 · site · :3002
+   v  SSM · push ECR · sync S3 · túneis
++-- AWS CLOUD ---------------------------------------------------------------------------------------------------+
+| +-- IAM (global) ----------------------+  +-- CUSTOS --------------------------------------------------------+ |
+| | <span class="d-done">usuário formacao_aws + policies      </span>|  | <span class="d-done">Budget mensal (opcional) · sem NAT Gateway                       </span>| |
+| | <span class="d-now">role-acesso-ssm -&gt; EC2 (SSM, ECR...) </span>|  | cobram por hora: EC2, RDS e IPv4 público                         | |
+| +--------------------------------------+  +------------------------------------------------------------------+ |
+| +-- REGIÃO us-east-1 (N. Virginia) --------------------------------------------------------------------------+ |
+| | <span class="d-now">+-- SSM Session Manager -+ +-- ECR -----------------+ </span><span class="d-todo">+-- S3 ------------------+ +-- ECS (controle) -----+ </span>| |
+| | <span class="d-now">| sessões na bia-dev     | | repositório bia        | </span><span class="d-todo">| bucket site estático   | | cluster-bia           | </span>| |
+| | <span class="d-now">| </span><span class="d-todo">túneis do porteiro     </span><span class="d-now">| | imagem :latest         | </span><span class="d-todo">| index.html + assets    | | service + task-def    | </span>| |
+| | <span class="d-now">+------------------------+ +------------------------+ </span><span class="d-todo">+------------------------+ +-----------------------+ </span>| |
+| | +-- VPC default · 172.31.0.0/16 (já existe) -------------------------------------------------------------+ | |
+| | | [ IGW default ]  todas as subnets default são públicas                                                 | | |
+| | | +-- AZ us-east-1a --------------------------------+  +-- AZ us-east-1b ------------------------------+ | | |
+| | | | +-- SUBNET DEFAULT 1a ------------------------+ |  | +-- SUBNET DEFAULT 1b ----------------------+ | | | |
+| | | | | <span class="d-now">+-- EC2 bia-dev ----+  </span><span class="d-todo">+-- EC2 cluster-bia +</span>| |  | | <span class="d-todo">+-- EC2 porteiro-bia -----+               </span>| | | | |
+| | | | | <span class="d-now">| SG bia-dev :3001  |  </span><span class="d-todo">| SG bia-web :80    |</span>| |  | | <span class="d-todo">| SG bia-porteiro         |               </span>| | | | |
+| | | | | <span class="d-now">| role-acesso-ssm   |  </span><span class="d-todo">| ASG + Launch Tmpl |</span>| |  | | <span class="d-todo">| sem porta de entrada    |               </span>| | | | |
+| | | | | <span class="d-now">| docker: BIA :3001 |  </span><span class="d-todo">| task bia          |</span>| |  | | <span class="d-todo">| role-acesso-ssm         |               </span>| | | | |
+| | | | | <span class="d-now">| </span><span class="d-todo">git · Kiro-CLI    </span><span class="d-now">|  </span><span class="d-todo">| 80 -&gt; 8080        |</span>| |  | | <span class="d-todo">| túnel -&gt; RDS :5432      |               </span>| | | | |
+| | | | | <span class="d-now">| </span><span class="d-todo">build/deploy.sh   </span><span class="d-now">|  </span><span class="d-todo">| API + front       |</span>| |  | | <span class="d-todo">| túnel -&gt; BIA :80        |               </span>| | | | |
+| | | | | <span class="d-now">| </span><span class="d-todo">migrations -&gt; RDS </span><span class="d-now">|  </span><span class="d-todo">| pull ECR :latest  |</span>| |  | | <span class="d-todo">+-------------------------+               </span>| | | | |
+| | | | | <span class="d-now">+-------------------+  </span><span class="d-todo">+-------------------+</span>| |  | |                                           | | | | |
+| | | | |                                             | |  | | <span class="d-todo">zona b · subnet default                   </span>| | | | |
+| | | | |                                             | |  | |                                           | | | | |
+| | | | |                                             | |  | |                                           | | | | |
+| | | | | <span class="d-todo">+-- RDS bia · PostgreSQL (público) --------+</span>| |  | |                                           | | | | |
+| | | | | <span class="d-todo">| SG bia-db :5432 &lt;- bia-web, bia-dev      |</span>| |  | |                                           | | | | |
+| | | | | <span class="d-todo">|                 &lt;- bia-porteiro          |</span>| |  | |                                           | | | | |
+| | | | | <span class="d-todo">| database bia · tabela "Tarefas"          |</span>| |  | |                                           | | | | |
+| | | | | <span class="d-todo">|                                          |</span>| |  | |                                           | | | | |
+| | | | | <span class="d-todo">+------------------------------------------+</span>| |  | |                                           | | | | |
+| | | | |                                             | |  | |                                           | | | | |
+| | | | +---------------------------------------------+ |  | +-------------------------------------------+ | | | |
+| | | +-------------------------------------------------+  +-----------------------------------------------+ | | |
+| | +--------------------------------------------------------------------------------------------------------+ | |
+| +------------------------------------------------------------------------------------------------------------+ |
++----------------------------------------------------------------------------------------------------------------+
+</pre><div class="arch-leg"><span class="d-done">■ já feito</span><span class="d-now">■ Desafio 1 (Parte 2) (agora)</span><span class="d-todo">■ próximos desafios</span></div><div class="arch-cap">Os desafios e onde este se encaixa</div><pre class="arch-ch">
+Desafios da Fase: Fundamentais
+
+<span class="d-now">Desafio 1 (Parte 2) — fazer os desafios do dia 1 e 2 da bia da sua VM</span>
+<span class="d-now">  DIA 1</span>
+<span class="d-now">    • Lançar máquina bia-dev (rodar a BIA na sua VM)</span>
+<span class="d-now">    • Configurar permissões IAM para o usuário ao invés da role</span>
+<span class="d-now">    • Testar comunicação com o ECR</span>
+<span class="d-now">  DIA 2</span>
+<span class="d-now">    • Fazer build da sua VM</span>
+<span class="d-now">    • Fazer push para o ECR da sua VM</span>
+
+<span class="d-todo">Desafio 3</span>
+<span class="d-todo">    • Criar um bucket para servir o site da bia de forma estática</span>
+<span class="d-todo">    • Criar um script Shell para gerar os assets do react da BIA</span>
+<span class="d-todo">        o O endereço da api deve ser passado por argumento</span>
+<span class="d-todo">    • Fazer um sync do seu diretório local com o bucket no s3</span>
+<span class="d-todo">    • Rodar o desafio da BIA no dia 2 para servir como API para o projeto do S3</span>
+<span class="d-todo">    • Salvar um registro em banco por esse site</span>
+
+<span class="d-todo">Desafio 4</span>
+<span class="d-todo">    • Crie script que lance o porteiro na zona b (subnet default)</span>
+<span class="d-todo">    • Crie script que inicie o porteiro com túnel para o RDS na porta local 5433</span>
+<span class="d-todo">        o Estabeleça comunicação, insira 1 registro manualmente no banco</span>
+<span class="d-todo">    • Crie túnel para bia e conecte nela na porta 3002 para ver o registro que foi adicionado</span>
+<span class="d-todo">    • Crie script que para a máquina do porteiro</span>
+
+<span class="d-todo">Desafios da Fase: Preparatórios (Desafio 1)</span>
+<span class="d-todo">    • Print da BIA rodando na porta 80 na AWS com seu email cadastrado e texto do botão alterado</span>
+<span class="d-todo">    • Diagnóstico do KIRO-CLI que nosso projeto está rodando corretamente no ECS</span>
+</pre></div>
+
+    <!-- ================================================================ F2 -->
+    <section class="phase" id="p2" data-group="Desafio 1 · Parte 2" data-title="Permissões, SG e role">
+      <div class="phase-head">
+        <span class="phase-n">FASE 2</span>
+        <div>
+          <h2>Permissões do usuário, SG <code>bia-dev</code> e <code>role-acesso-ssm</code></h2>
+          <p>Como na aula: tentar, ler o <code>AccessDenied</code>, dar ao <b>usuário</b> só o que os scripts precisam e tentar de novo.</p>
+        </div>
+        <span class="phase-count" data-count-for="p2"></span>
+      </div>
+
+      <div class="step" id="passo-2-1">
+        <div class="step-top"><a class="step-id" href="#passo-2-1">2.1</a><h3>Tentar e ler os erros</h3><span class="where w-wsl">WSL</span></div>
+        <div class="cmd"><span class="cmd-label">Comando</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>cd ~/bia
+<span class="p">$ </span>bash scripts/validar_recursos_zona_a.sh
+<span class="p">$ </span>bash scripts/criar_role_ssm.sh</pre></div>
+        <div class="out bad"><span class="out-label">Resposta esperada</span><pre>&gt;[ERRO] Tenho um problema ao retornar a VPC default. Será se ela existe?
+&gt;[ERRO] Tenho um problema ao retornar a subnet da zona a. Será se existe uma subnet na zona A?
+&gt;[ERRO] Não achei o security group bia-dev. Ele foi criado?
+&gt;[ERRO] A role 'role-acesso-ssm' não existe
+... is not authorized to perform: iam:CreateRole ...
+... is not authorized to perform: iam:CreateInstanceProfile ...
+... is not authorized to perform: iam:AddRoleToInstanceProfile ...
+... is not authorized to perform: iam:AttachRolePolicy ...</pre></div>
+        <div class="check"><div class="check-label">Checklist</div><ul>
+          <li><label><input type="checkbox"><span>Vi os AccessDenied de IAM</span></label></li>
+        </ul></div>
+      </div>
+
+      <div class="step" id="passo-2-2">
+        <div class="step-top"><a class="step-id" href="#passo-2-2">2.2</a><h3>Inline <code>PermissaoScriptsIAM</code> + <code>AmazonEC2FullAccess</code> (limitação: Console)</h3><span class="where w-console">CONSOLE</span></div>
+        <div class="out clicks"><span class="out-label">Console (administrador) ›</span><pre>IAM  &gt;  Users  &gt;  formacao_aws  &gt;  Add permissions  &gt;  Create inline policy  &gt;  JSON
+  (colar abaixo)  &gt;  Next  &gt;  PermissaoScriptsIAM  &gt;  Create policy
+Add permissions  &gt;  Attach policies directly  &gt;  AmazonEC2FullAccess  &gt;  Add permissions</pre></div>
+        <div class="cmd"><span class="cmd-label">Policy JSON</span><button class="copy" type="button">copiar</button><pre>{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": ["iam:CreateRole","iam:GetRole","iam:CreateInstanceProfile","iam:GetInstanceProfile",
+               "iam:AddRoleToInstanceProfile","iam:AttachRolePolicy","iam:PassRole"],
+    "Resource": "*"
+  }]
+}</pre></div>
+        <p><code>iam:PassRole</code> é o que deixa o usuário entregar a role a uma EC2 no <code>run-instances</code>. Nem o <code>AmazonEC2FullAccess</code> inclui essa permissão. O <code>AmazonEC2FullAccess</code> cobre SGs e o lançamento.</p>
+        <div class="check"><div class="check-label">Checklist</div><ul>
+          <li><label><input type="checkbox"><span>As duas permissões no <code>formacao_aws</code></span></label></li>
+        </ul></div>
+      </div>
+
+      <div class="step" id="passo-2-3">
+        <div class="step-top"><a class="step-id" href="#passo-2-3">2.3</a><h3>Criar o SG <code>bia-dev</code>, a role e validar</h3><span class="where w-wsl">WSL</span></div>
+        <div class="cmd"><span class="cmd-label">Comando</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>VPC_ID=$(aws ec2 describe-vpcs --filters Name=isDefault,Values=true --query 'Vpcs[0].VpcId' --output text)
+<span class="p">$ </span>SG_DEV=$(aws ec2 create-security-group --group-name bia-dev --description "acesso do bia-dev" --vpc-id $VPC_ID --query GroupId --output text)
+<span class="p">$ </span>aws ec2 authorize-security-group-ingress --group-id $SG_DEV --ip-permissions \
+  '[{"IpProtocol":"tcp","FromPort":3001,"ToPort":3001,"IpRanges":[{"CidrIp":"0.0.0.0/0","Description":"liberado geral"}]}]'
+<span class="p">$ </span>bash scripts/criar_role_ssm.sh
+<span class="p">$ </span>bash scripts/validar_recursos_zona_a.sh</pre></div>
+        <div class="out good"><span class="out-label">Resposta esperada (o validador)</span><pre>[OK] Tudo certo com a VPC
+[OK] Tudo certo com a Subnet
+[OK] Security Group bia-dev foi criado
+ [OK] Regra de entrada está ok
+ [OK] Regra de saída está correta
+[OK] Tudo certo com a role 'role-acesso-ssm'</pre></div>
+        <p><code>VPC_ID</code> = <code>None</code>? A conta está sem VPC default: <code>aws ec2 create-default-vpc</code>. Se o <code>criar_role_ssm.sh</code> disser que a role já existe, a primeira tentativa criou parte dela; o validador confirma.</p>
+        <div class="check"><div class="check-label">Checklist</div><ul>
+          <li><label><input type="checkbox"><span>Seis <code>[OK]</code> no validador</span></label></li>
+        </ul></div>
+      </div>
+    </section>
+
+    <!-- ================================================================ F3 -->
+    <section class="phase" id="p3" data-group="Desafio 1 · Parte 2" data-title="bia-dev por script">
+      <div class="phase-head">
+        <span class="phase-n">FASE 3</span>
+        <div>
+          <h2>Lançar a <code>bia-dev</code> com o <code>lancar_ec2_zona_a.sh</code></h2>
+          <p>O script do projeto, com um ajuste: a AMI dele é um ID fixo que envelhece, e a rule manda buscar a mais recente no SSM Parameter Store.</p>
+        </div>
+        <span class="phase-count" data-count-for="p3"></span>
+      </div>
+
+      <div class="step" id="passo-3-1">
+        <div class="step-top"><a class="step-id" href="#passo-3-1">3.1</a><h3>Atualizar a AMI e lançar</h3><span class="where w-wsl">WSL</span></div>
+        <div class="cmd"><span class="cmd-label">Comando</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>AMI_ID=$(aws ssm get-parameter --name /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64 --query Parameter.Value --output text)
+<span class="p">$ </span>sed -i "s/--image-id ami-[0-9a-f]*/--image-id $AMI_ID/" ~/bia/scripts/lancar_ec2_zona_a.sh
+<span class="p">$ </span>grep -o -- '--image-id [^ ]*' ~/bia/scripts/lancar_ec2_zona_a.sh
+<span class="p">$ </span>bash ~/bia/scripts/lancar_ec2_zona_a.sh | grep -m1 '"InstanceId"'</pre></div>
+        <div class="tablewrap"><table>
+          <thead><tr><th>O script faz</th><th>Por quê</th></tr></thead>
+          <tbody>
+            <tr><td>VPC default → subnet da <code>us-east-1a</code> → SG <code>bia-dev</code></td><td>As três dependências de uma EC2 (VPC, subnet, SG)</td></tr>
+            <tr><td><code>--associate-public-ip-address</code></td><td>Sem NAT, é o IP público que dá saída para SSM/ECR e o acesso à 3001</td></tr>
+            <tr><td><code>--iam-instance-profile Name=role-acesso-ssm</code></td><td>Identidade da máquina (exige <code>iam:PassRole</code> no usuário)</td></tr>
+            <tr><td><code>--user-data file://.../user_data_ec2_zona_a.sh</code></td><td>Docker, Compose, git, AWS CLI, Node 24, Python 3.11, uv e 4 GB de swap</td></tr>
+            <tr><td>15 GiB gp2 · tag <code>Name=bia-dev</code></td><td>Espaço para imagens; nome usado por todos os comandos</td></tr>
+          </tbody>
+        </table></div>
+        <div class="out good"><span class="out-label">Resposta esperada</span><pre>--image-id ami-xxxxxxxxxxxxxxxxx
+"InstanceId": "i-xxxxxxxxxxxxxxxxx"</pre></div>
+        <p>O script imprime o JSON inteiro do <code>run-instances</code>; o <code>grep</code> só destaca o ID. O <code>sed</code> altera o clone local em <code>~/bia</code>, não o seu fork.</p>
+        <div class="check"><div class="check-label">Checklist</div><ul>
+          <li><label><input type="checkbox"><span><code>bia-dev</code> lançada com a AMI atual</span></label></li>
+        </ul></div>
+      </div>
+
+      <div class="step" id="passo-3-2">
+        <div class="step-top"><a class="step-id" href="#passo-3-2">3.2</a><h3>SSM Online, sessão e prova de que é SSM</h3><span class="where w-ssm">WSL › BIA-DEV</span></div>
+        <div class="cmd"><span class="cmd-label">No WSL</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>aws ec2 describe-instances --filters "Name=instance-state-name,Values=running" \
+  --query "Reservations[].Instances[].{ID:InstanceId,Nome:Tags[?Key=='Name']|[0].Value,IP:PublicIpAddress}" --output table
+<span class="p">$ </span>BIA_DEV_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=$BIA_DEV" "Name=instance-state-name,Values=running" --query 'Reservations[0].Instances[0].InstanceId' --output text)
+<span class="p">$ </span>aws ssm describe-instance-information --filters "Key=InstanceIds,Values=$BIA_DEV_ID" --query 'InstanceInformationList[0].PingStatus' --output text
+<span class="p">$ </span>bash ~/bia/scripts/start-session-bash.sh "$BIA_DEV_ID"</pre></div>
+        <div class="cmd"><span class="cmd-label">Dentro da bia-dev</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>sudo su - ec2-user
+<span class="p">$ </span>ps -ef --forest | grep [s]sm-session-worker
+<span class="p">$ </span>docker --version &amp;&amp; docker compose version &amp;&amp; node -v &amp;&amp; uv --version</pre></div>
+        <div class="out good"><span class="out-label">Resposta esperada</span><pre>Online                 (None? espere 2–5 min)
+root ... \_ /usr/bin/ssm-session-worker formacao_aws-xxxx
+Docker version 2x ... / v2.23.3 / v24.x / uv 0.x</pre></div>
+        <p>Para sair: <code>exit</code> duas vezes (ec2-user → ssm-user → WSL).</p>
+        <div class="check"><div class="check-label">Checklist</div><ul>
+          <li><label><input type="checkbox"><span>Sessão SSM, <code>ssm-session-worker</code> visível, ferramentas ok</span></label></li>
+        </ul></div>
+      </div>
+    </section>
+
+    <!-- ================================================================ F4 -->
+    <section class="phase" id="p4" data-group="Desafio 1 · Parte 2" data-title="Projeto e BIA na bia-dev">
+      <div class="phase-head">
+        <span class="phase-n">FASE 4</span>
+        <div>
+          <h2>Fork, chave SSH, clone e a BIA na 3001</h2>
+          <p>Já com o seu fork, porque o Desafio 1 vai commitar nele.</p>
+        </div>
+        <span class="phase-count" data-count-for="p4"></span>
+      </div>
+
+      <div class="step" id="passo-4-1">
+        <div class="step-top"><a class="step-id" href="#passo-4-1">4.1</a><h3>Chave SSH, fork e clone</h3><span class="where w-ssm">BIA-DEV + WEB</span></div>
+        <div class="cmd"><span class="cmd-label">Na bia-dev</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>ssh-keygen -t rsa -b 4096 -N "" -f ~/.ssh/id_rsa
+<span class="p">$ </span>git config --global user.name "&lt;SEU_NOME&gt;" &amp;&amp; git config --global user.email "&lt;SEU_EMAIL_GITHUB&gt;"
+<span class="p">$ </span>cat ~/.ssh/id_rsa.pub</pre></div>
+        <div class="out clicks"><span class="out-label">Manual, no GitHub</span><pre>github.com/henrylle/bia  &gt;  Fork
+Settings  &gt;  SSH and GPG keys  &gt;  New SSH key  &gt;  colar o id_rsa.pub</pre></div>
+        <div class="cmd"><span class="cmd-label">Na bia-dev</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>ssh -T git@github.com
+<span class="p">$ </span>cd ~ &amp;&amp; git clone git@github.com:&lt;SEU_USUARIO_GITHUB&gt;/bia.git &amp;&amp; cd bia &amp;&amp; git remote get-url origin</pre></div>
+        <div class="check"><div class="check-label">Checklist</div><ul>
+          <li><label><input type="checkbox"><span><code>origin</code> = seu fork, em <code>/home/ec2-user/bia</code></span></label></li>
+        </ul></div>
+      </div>
+
+      <div class="step" id="passo-4-2">
+        <div class="step-top"><a class="step-id" href="#passo-4-2">4.2</a><h3>Rodar a BIA (3001), testar e derrubar</h3><span class="where w-ssm">BIA-DEV</span></div>
+        <div class="cmd"><span class="cmd-label">Na bia-dev, em ~/bia</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>IP_DEV=$(curl -s http://checkip.amazonaws.com)
+<span class="p">$ </span>sed -i "s#VITE_API_URL=http://[^ ]*#VITE_API_URL=http://$IP_DEV:3001#" Dockerfile
+<span class="p">$ </span>docker compose up -d --build &amp;&amp; docker compose ps
+<span class="p">$ </span>docker compose exec server bash -c 'npx sequelize db:migrate'
+<span class="p">$ </span>curl -s http://localhost:3001/api/versao; echo</pre></div>
+        <p>Teste no navegador: <code>http://&lt;IP_PUBLICO_BIA_DEV&gt;:3001</code>, criando uma tarefa. O IP vai no <code>VITE_API_URL</code> porque o front é compilado no build e roda no <b>seu</b> navegador. Depois:</p>
+        <div class="cmd"><span class="cmd-label">Derrubar e desfazer</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>docker compose down &amp;&amp; git checkout -- Dockerfile</pre></div>
+        <div class="check"><div class="check-label">Checklist</div><ul>
+          <li><label><input type="checkbox"><span>BIA respondeu na 3001; compose derrubado</span></label></li>
+        </ul></div>
+      </div>
+    </section>
+
+    <!-- ================================================================ F5 -->
+    <section class="phase" id="p5" data-group="Desafio 1 · Parte 2" data-title="ECR: testar comunicação">
+      <div class="phase-head">
+        <span class="phase-n">FASE 5</span>
+        <div>
+          <h2>Dia 1: o ECR pelo usuário e pela role</h2>
+          <p>O mesmo comando com duas identidades: o <code>formacao_aws</code> no WSL e a <code>role-acesso-ssm</code> na <code>bia-dev</code>.</p>
+        </div>
+        <span class="phase-count" data-count-for="p5"></span>
+      </div>
+
+      <div class="step" id="passo-5-1">
+        <div class="step-top"><a class="step-id" href="#passo-5-1">5.1</a><h3>Criar o repositório e testar pelo WSL</h3><span class="where w-wsl">WSL</span></div>
+        <div class="cmd"><span class="cmd-label">Comando</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>aws ecr create-repository --repository-name "$ECR_REPO" --query 'repository.repositoryUri' --output text
+<span class="p">$ </span>aws ecr describe-repositories --query 'repositories[].repositoryName' --output text</pre></div>
+        <div class="out good"><span class="out-label">Resposta esperada</span><pre>&lt;ACCOUNT_ID&gt;.dkr.ecr.us-east-1.amazonaws.com/bia
+bia</pre></div>
+        <div class="check"><div class="check-label">Checklist</div><ul>
+          <li><label><input type="checkbox"><span>Repositório <code>bia</code> criado e visível do WSL</span></label></li>
+        </ul></div>
+      </div>
+
+      <div class="step" id="passo-5-2">
+        <div class="step-top"><a class="step-id" href="#passo-5-2">5.2</a><h3>Pela <code>bia-dev</code>: falha, policies na role, funciona</h3><span class="where w-wsl">BIA-DEV + WSL</span></div>
+        <div class="cmd"><span class="cmd-label">Na bia-dev — AccessDenied</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>aws ecr describe-repositories --region us-east-1</pre></div>
+        <div class="cmd"><span class="cmd-label">No WSL — a inline do 2.2 permite anexar policies à role</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>for p in AmazonEC2ContainerRegistryPowerUser AmazonECS_FullAccess AmazonEC2FullAccess AmazonRDSFullAccess; do
+  aws iam attach-role-policy --role-name role-acesso-ssm --policy-arn arn:aws:iam::aws:policy/$p
+done</pre></div>
+        <div class="cmd"><span class="cmd-label">Na bia-dev — funciona</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>aws ecr describe-repositories --region us-east-1 --query 'repositories[].repositoryName' --output text</pre></div>
+        <div class="out good"><span class="out-label">Resposta esperada</span><pre>bia</pre></div>
+        <p>A aula escreve "AmazonECSFullAccess", mas no IAM o nome é <code>AmazonECS_FullAccess</code>. Essas policies da role servem ao Desafio 1: <code>build.sh</code>, <code>deploy.sh</code> e o Kiro.</p>
+        <div class="check"><div class="check-label">Checklist</div><ul>
+          <li><label><input type="checkbox"><span>AccessDenied antes, <code>bia</code> depois</span></label></li>
+        </ul></div>
+      </div>
+    </section>
+
+    <!-- ================================================================ F6 -->
+    <section class="phase" id="p6" data-group="Desafio 1 · Parte 2" data-title="Dia 2: build e push do WSL">
+      <div class="phase-head">
+        <span class="phase-n">FASE 6</span>
+        <div>
+          <h2>Dia 2: build e push para o ECR a partir do WSL</h2>
+          <p>A mesma sequência do <code>build.sh</code>, com o Docker Desktop. Esta <code>latest</code> é a imagem da primeira task do Desafio 1.</p>
+        </div>
+        <span class="phase-count" data-count-for="p6"></span>
+      </div>
+
+      <div class="step" id="passo-6-1">
+        <div class="step-top"><a class="step-id" href="#passo-6-1">6.1</a><h3>Login, build, tag, push e conferência</h3><span class="where w-wsl">WSL</span></div>
+        <div class="cmd"><span class="cmd-label">Comando</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>cd ~/bia
+<span class="p">$ </span>REGISTRY=$(aws sts get-caller-identity --query Account --output text).dkr.ecr.us-east-1.amazonaws.com
+<span class="p">$ </span>aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin "$REGISTRY"
+<span class="p">$ </span>docker build -t bia . &amp;&amp; docker tag bia:latest "$REGISTRY/bia:latest" &amp;&amp; docker push "$REGISTRY/bia:latest"
+<span class="p">$ </span>aws ecr describe-images --repository-name bia --query 'imageDetails[].imageTags' --output text</pre></div>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Trecho</th><th>O que faz</th></tr></thead>
+          <tbody>
+            <tr><td><code>get-login-password | docker login</code></td><td>Token do ECR gerado pelo <code>formacao_aws</code>, entregue ao Docker sem passar pela tela</td></tr>
+            <tr><td><code>build</code> / <code>tag</code> / <code>push</code></td><td>Imagem <code>bia</code> → <code>&lt;ACCOUNT_ID&gt;.dkr.ecr.us-east-1.amazonaws.com/bia:latest</code></td></tr>
+          </tbody>
+        </table></div>
+        <div class="out good"><span class="out-label">Resposta esperada</span><pre>Login Succeeded
+latest: digest: sha256:xxxx size: xxxx
+latest</pre></div>
+        <div class="check"><div class="check-label">Entrega — Desafio 1 (Parte 2)</div><ul>
+          <li><label><input type="checkbox"><span>Dia 1: <code>bia-dev</code> por script (F3) e BIA rodando nela (F4)</span></label></li>
+          <li><label><input type="checkbox"><span>Dia 1: permissões IAM no usuário (F1/F2)</span></label></li>
+          <li><label><input type="checkbox"><span>Dia 1: ECR testado pelo usuário e pela role (F5)</span></label></li>
+          <li><label><input type="checkbox"><span>Dia 2: build e push do WSL, com print do repositório no ECR (F6)</span></label></li>
+        </ul></div>
+      </div>
+    </section>
+
+    <div class="stage" id="etapa-d1"><span>Desafio 1</span><b>BIA no ECS na porta 80 + diagnóstico do Kiro-CLI</b><p>A imagem enviada do WSL vira task no ECS, falando com o RDS.</p></div>
+      <div class="ascii arch"><div class="arch-cap">Arquitetura: o que já existe, o que este desafio cria e o que vem depois</div><pre>
+<span class="d-done">+-- SUA VM · WSL 2 (Ubuntu) -----------------+   </span>+-- NAVEGADOR -----------------+  +-- GITHUB -------------------+
+<span class="d-done">| aws cli v2 · session-manager-plugin        |   </span>| <span class="d-now">http://IP_ECS (porta 80)     </span>|  | <span class="d-done">henrylle/bia (clone no WSL) </span>|
+<span class="d-done">| usuário IAM formacao_aws (aws login)       |   </span>| <span class="d-todo">http://bucket.s3-website     </span>|  | <span class="d-done">fork · chave SSH da bia-dev </span>|
+<span class="d-done">| docker build + push -&gt; ECR (Dia 2)         |   </span>| <span class="d-todo">http://localhost:3002        </span>|  | <span class="d-now">commit do botão (git push)  </span>|
+<span class="d-done">| lancar_ec2_zona_a.sh -&gt; EC2 bia-dev        |   </span>+------------------------------+  +-----------------------------+
+<span class="d-done">| </span><span class="d-todo">deploy.sh (react.sh + s3.sh) -&gt; S3         </span><span class="d-done">|                  </span>|
+<span class="d-done">| </span><span class="d-todo">01..04 porteiro · túneis 5433 / 3002       </span><span class="d-done">|                  </span>|
+<span class="d-done">+--------------------------------------------+                  </span>v  :80 · site · :3002
+   v  SSM · push ECR · sync S3 · túneis
++-- AWS CLOUD ---------------------------------------------------------------------------------------------------+
+| +-- IAM (global) ----------------------+  +-- CUSTOS --------------------------------------------------------+ |
+| | <span class="d-done">usuário formacao_aws + policies      </span>|  | <span class="d-done">Budget mensal (opcional) · sem NAT Gateway                       </span>| |
+| | <span class="d-done">role-acesso-ssm -&gt; EC2 (SSM, ECR...) </span>|  | cobram por hora: EC2, RDS e IPv4 público                         | |
+| +--------------------------------------+  +------------------------------------------------------------------+ |
+| +-- REGIÃO us-east-1 (N. Virginia) --------------------------------------------------------------------------+ |
+| | <span class="d-done">+-- SSM Session Manager -+ +-- ECR -----------------+ </span><span class="d-todo">+-- S3 ------------------+ </span><span class="d-now">+-- ECS (controle) -----+ </span>| |
+| | <span class="d-done">| sessões na bia-dev     | | repositório bia        | </span><span class="d-todo">| bucket site estático   | </span><span class="d-now">| cluster-bia           | </span>| |
+| | <span class="d-done">| </span><span class="d-todo">túneis do porteiro     </span><span class="d-done">| | imagem :latest         | </span><span class="d-todo">| index.html + assets    | </span><span class="d-now">| service + task-def    | </span>| |
+| | <span class="d-done">+------------------------+ +------------------------+ </span><span class="d-todo">+------------------------+ </span><span class="d-now">+-----------------------+ </span>| |
+| | +-- VPC default · 172.31.0.0/16 (já existe) -------------------------------------------------------------+ | |
+| | | [ IGW default ]  todas as subnets default são públicas                                                 | | |
+| | | +-- AZ us-east-1a --------------------------------+  +-- AZ us-east-1b ------------------------------+ | | |
+| | | | +-- SUBNET DEFAULT 1a ------------------------+ |  | +-- SUBNET DEFAULT 1b ----------------------+ | | | |
+| | | | | <span class="d-done">+-- EC2 bia-dev ----+  </span><span class="d-now">+-- EC2 cluster-bia +</span>| |  | | <span class="d-todo">+-- EC2 porteiro-bia -----+               </span>| | | | |
+| | | | | <span class="d-done">| SG bia-dev :3001  |  </span><span class="d-now">| SG bia-web :80    |</span>| |  | | <span class="d-todo">| SG bia-porteiro         |               </span>| | | | |
+| | | | | <span class="d-done">| role-acesso-ssm   |  </span><span class="d-now">| ASG + Launch Tmpl |</span>| |  | | <span class="d-todo">| sem porta de entrada    |               </span>| | | | |
+| | | | | <span class="d-done">| docker: BIA :3001 |  </span><span class="d-now">| task bia          |</span>| |  | | <span class="d-todo">| role-acesso-ssm         |               </span>| | | | |
+| | | | | <span class="d-done">| </span><span class="d-now">git · Kiro-CLI    </span><span class="d-done">|  </span><span class="d-now">| 80 -&gt; 8080        |</span>| |  | | <span class="d-todo">| túnel -&gt; RDS :5432      |               </span>| | | | |
+| | | | | <span class="d-done">| </span><span class="d-now">build/deploy.sh   </span><span class="d-done">|  </span><span class="d-now">| API + front       |</span>| |  | | <span class="d-todo">| túnel -&gt; BIA :80        |               </span>| | | | |
+| | | | | <span class="d-done">| </span><span class="d-now">migrations -&gt; RDS </span><span class="d-done">|  </span><span class="d-now">| pull ECR :latest  |</span>| |  | | <span class="d-todo">+-------------------------+               </span>| | | | |
+| | | | | <span class="d-done">+-------------------+  </span><span class="d-now">+-------------------+</span>| |  | |                                           | | | | |
+| | | | |                                             | |  | | <span class="d-todo">zona b · subnet default                   </span>| | | | |
+| | | | |                                             | |  | |                                           | | | | |
+| | | | |                                             | |  | |                                           | | | | |
+| | | | | <span class="d-now">+-- RDS bia · PostgreSQL (público) --------+</span>| |  | |                                           | | | | |
+| | | | | <span class="d-now">| SG bia-db :5432 &lt;- bia-web, bia-dev      |</span>| |  | |                                           | | | | |
+| | | | | <span class="d-now">|                 </span><span class="d-todo">&lt;- bia-porteiro          </span><span class="d-now">|</span>| |  | |                                           | | | | |
+| | | | | <span class="d-now">| database bia · tabela "Tarefas"          |</span>| |  | |                                           | | | | |
+| | | | | <span class="d-now">|                                          |</span>| |  | |                                           | | | | |
+| | | | | <span class="d-now">+------------------------------------------+</span>| |  | |                                           | | | | |
+| | | | |                                             | |  | |                                           | | | | |
+| | | | +---------------------------------------------+ |  | +-------------------------------------------+ | | | |
+| | | +-------------------------------------------------+  +-----------------------------------------------+ | | |
+| | +--------------------------------------------------------------------------------------------------------+ | |
+| +------------------------------------------------------------------------------------------------------------+ |
++----------------------------------------------------------------------------------------------------------------+
+</pre><div class="arch-leg"><span class="d-done">■ já feito</span><span class="d-now">■ Desafio 1 (preparatório) (agora)</span><span class="d-todo">■ próximos desafios</span></div><div class="arch-cap">Os desafios e onde este se encaixa</div><pre class="arch-ch">
+Desafios da Fase: Fundamentais
+
+<span class="d-done">Desafio 1 (Parte 2) — fazer os desafios do dia 1 e 2 da bia da sua VM</span>
+<span class="d-done">  DIA 1</span>
+<span class="d-done">    • Lançar máquina bia-dev (rodar a BIA na sua VM)</span>
+<span class="d-done">    • Configurar permissões IAM para o usuário ao invés da role</span>
+<span class="d-done">    • Testar comunicação com o ECR</span>
+<span class="d-done">  DIA 2</span>
+<span class="d-done">    • Fazer build da sua VM</span>
+<span class="d-done">    • Fazer push para o ECR da sua VM</span>
+
+<span class="d-todo">Desafio 3</span>
+<span class="d-todo">    • Criar um bucket para servir o site da bia de forma estática</span>
+<span class="d-todo">    • Criar um script Shell para gerar os assets do react da BIA</span>
+<span class="d-todo">        o O endereço da api deve ser passado por argumento</span>
+<span class="d-todo">    • Fazer um sync do seu diretório local com o bucket no s3</span>
+<span class="d-todo">    • Rodar o desafio da BIA no dia 2 para servir como API para o projeto do S3</span>
+<span class="d-todo">    • Salvar um registro em banco por esse site</span>
+
+<span class="d-todo">Desafio 4</span>
+<span class="d-todo">    • Crie script que lance o porteiro na zona b (subnet default)</span>
+<span class="d-todo">    • Crie script que inicie o porteiro com túnel para o RDS na porta local 5433</span>
+<span class="d-todo">        o Estabeleça comunicação, insira 1 registro manualmente no banco</span>
+<span class="d-todo">    • Crie túnel para bia e conecte nela na porta 3002 para ver o registro que foi adicionado</span>
+<span class="d-todo">    • Crie script que para a máquina do porteiro</span>
+
+<span class="d-now">Desafios da Fase: Preparatórios (Desafio 1)</span>
+<span class="d-now">    • Print da BIA rodando na porta 80 na AWS com seu email cadastrado e texto do botão alterado</span>
+<span class="d-now">    • Diagnóstico do KIRO-CLI que nosso projeto está rodando corretamente no ECS</span>
+</pre></div>
+
+    <!-- ================================================================ F7 -->
+    <section class="phase" id="p7" data-group="Desafio 1" data-title="Kiro-CLI">
+      <div class="phase-head">
+        <span class="phase-n">FASE 7</span>
+        <div>
+          <h2>O agente: Kiro-CLI com o agente <code>bia</code> na <code>bia-dev</code></h2>
+          <p>O Kiro acessa a AWS pela role da instância (policies do passo 5.2).</p>
+        </div>
+        <span class="phase-count" data-count-for="p7"></span>
+      </div>
+
+      <div class="step" id="passo-7-1">
+        <div class="step-top"><a class="step-id" href="#passo-7-1">7.1</a><h3>Instalar, autenticar e abrir o agente</h3><span class="where w-kiro">BIA-DEV › KIRO</span></div>
+        <div class="note n-warn"><b>A confirmar: instalação e login</b><p>A aula indica só <code>https://kiro.dev/docs/cli/installation/#with-a-zip-file</code>, que hoje redireciona para <code>kiro.dev/docs/getting-started/installation/</code>. Siga o método zip para Linux e o login por URL/código (a <code>bia-dev</code> não tem navegador).</p></div>
+        <div class="cmd"><span class="cmd-label">Na bia-dev, em ~/bia</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>kiro-cli --version
+<span class="p">$ </span>cat .kiro/agents/bia.json
+<span class="p">$ </span>kiro-cli chat --agent "bia"</pre></div>
+        <p>O agente <code>bia</code> carrega <code>AmazonQ.md</code>, <code>README.md</code> e <code>.kiro/rules/*.md</code> (nomes, SGs, 1 vCPU / 400 MB). A variante com MCP servers (postgres + aws-mcp) está em <code>.kiro/bia-com-mcp-db-aws.json</code>. Para usá-la (<b>a confirmar</b>): <code>cp .kiro/agents/bia.json .kiro/agents/bia.json.bak</code> e depois <code>cp .kiro/bia-com-mcp-db-aws.json .kiro/agents/bia.json</code>. <code>/quit</code> sai do chat.</p>
+        <div class="check"><div class="check-label">Checklist</div><ul>
+          <li><label><input type="checkbox"><span><code>kiro-cli chat --agent "bia"</code> abre e responde</span></label></li>
+        </ul></div>
+      </div>
+    </section>
+
+    <!-- ================================================================ F8 -->
+    <section class="phase" id="p8" data-group="Desafio 1" data-title="SGs e RDS">
+      <div class="phase-head">
+        <span class="phase-n">FASE 8</span>
+        <div>
+          <h2>SGs <code>bia-web</code> / <code>bia-db</code> e o RDS <code>bia</code></h2>
+          <p>O RDS leva cerca de 10 minutos. Crie-o e siga para o cluster enquanto ele sobe.</p>
+        </div>
+        <span class="phase-count" data-count-for="p8"></span>
+      </div>
+
+      <div class="step" id="passo-8-1">
+        <div class="step-top"><a class="step-id" href="#passo-8-1">8.1</a><h3>RDS e ECS para o usuário (limitação: Console)</h3><span class="where w-console">CONSOLE</span></div>
+        <div class="out clicks"><span class="out-label">Console (administrador) ›</span><pre>IAM  &gt;  Users  &gt;  formacao_aws  &gt;  Add permissions  &gt;  Attach policies directly
+  AmazonRDSFullAccess · AmazonECS_FullAccess  &gt;  Add permissions</pre></div>
+        <p>Sem elas, o <code>create-db-instance</code> e o <code>register-task-definition</code> abaixo respondem <code>AccessDenied</code>.</p>
+        <div class="check"><div class="check-label">Checklist</div><ul>
+          <li><label><input type="checkbox"><span>Duas policies a mais no usuário</span></label></li>
+        </ul></div>
+      </div>
+
+      <div class="step" id="passo-8-2">
+        <div class="step-top"><a class="step-id" href="#passo-8-2">8.2</a><h3>Criar <code>bia-web</code> e <code>bia-db</code></h3><span class="where w-wsl">WSL</span></div>
+        <div class="cmd"><span class="cmd-label">Comando</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>source ~/DESAFIO1/desafio1.sh
+<span class="p">$ </span>VPC_ID=$(aws ec2 describe-vpcs --filters Name=isDefault,Values=true --query 'Vpcs[0].VpcId' --output text)
+<span class="p">$ </span>SG_DEV=$(aws ec2 describe-security-groups --filters Name=group-name,Values=bia-dev Name=vpc-id,Values=$VPC_ID --query 'SecurityGroups[0].GroupId' --output text)
+<span class="p">$ </span>SG_WEB=$(aws ec2 create-security-group --group-name bia-web --description "acesso do bia-web" --vpc-id $VPC_ID --query GroupId --output text)
+<span class="p">$ </span>SG_DB=$(aws ec2 create-security-group --group-name bia-db --description "acesso do bia-db" --vpc-id $VPC_ID --query GroupId --output text)
+<span class="p">$ </span>aws ec2 authorize-security-group-ingress --group-id $SG_WEB --ip-permissions \
+  '[{"IpProtocol":"tcp","FromPort":80,"ToPort":80,"IpRanges":[{"CidrIp":"0.0.0.0/0","Description":"liberado geral"}]}]'
+<span class="p">$ </span>aws ec2 authorize-security-group-ingress --group-id $SG_DB --ip-permissions \
+  '[{"IpProtocol":"tcp","FromPort":5432,"ToPort":5432,"UserIdGroupPairs":[
+     {"GroupId":"'"$SG_WEB"'","Description":"acesso vindo de bia-web"},
+     {"GroupId":"'"$SG_DEV"'","Description":"acesso vindo de bia-dev"}]}]'</pre></div>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Trecho</th><th>O que resolve</th></tr></thead>
+          <tbody>
+            <tr><td><code>bia-web</code> 80</td><td>A porta da entrega 1 (task <code>80→8080</code>)</td></tr>
+            <tr><td><code>UserIdGroupPairs</code></td><td>Origem = SG, não IP; descrição no padrão da rule. A regra do <code>bia-dev</code> faltou na aula, e o Kiro achou</td></tr>
+            <tr><td><code>'"$SG_WEB"'</code></td><td>Fecha a aspa simples, insere a variável e reabre</td></tr>
+          </tbody>
+        </table></div>
+        <div class="check"><div class="check-label">Checklist</div><ul>
+          <li><label><input type="checkbox"><span><code>bia-web</code> 80 e <code>bia-db</code> 5432 de <code>bia-web</code> e <code>bia-dev</code></span></label></li>
+        </ul></div>
+      </div>
+
+      <div class="step" id="passo-8-3">
+        <div class="step-top"><a class="step-id" href="#passo-8-3">8.3</a><h3>Criar o RDS</h3><span class="where w-wsl">WSL</span></div>
+        <p>A aula usa <i>Auto generate password</i>, que só existe no Console. Pela CLI você define a senha, e o <code>read -s</code> a esconde da tela e do histórico.</p>
+        <div class="cmd"><span class="cmd-label">Comando</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>read -rsp "Senha do RDS (sem / @ \" ou espaço): " RDS_PWD; echo
+<span class="p">$ </span>aws rds create-db-instance --db-instance-identifier "$RDS_ID" \
+  --engine postgres --db-instance-class db.t3.micro --allocated-storage 20 --storage-type gp2 \
+  --master-username postgres --master-user-password "$RDS_PWD" \
+  --vpc-security-group-ids $SG_DB --availability-zone us-east-1a \
+  --publicly-accessible --no-multi-az --backup-retention-period 0 --no-deletion-protection \
+  --query 'DBInstance.DBInstanceStatus' --output text</pre></div>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Parâmetro</th><th>Equivale na aula a</th></tr></thead>
+          <tbody>
+            <tr><td><code>db.t3.micro</code>, 20 GiB, sem autoscaling</td><td>Free tier, 20 GiB, autoscaling desmarcado</td></tr>
+            <tr><td><code>--no-multi-az</code> · <code>us-east-1a</code></td><td>Single-AZ na zona a</td></tr>
+            <tr><td><code>--publicly-accessible</code></td><td>Public access: Yes (aula). O <code>bia-db</code> continua aceitando só SGs</td></tr>
+            <tr><td><code>--backup-retention-period 0</code></td><td>Backup desmarcado</td></tr>
+            <tr><td>sem <code>--engine-version</code></td><td>Versão padrão (aula 18.3-R2; diagnóstico 16.3, a confirmar)</td></tr>
+          </tbody>
+        </table></div>
+        <div class="out good"><span class="out-label">Resposta esperada</span><pre>creating</pre></div>
+        <p>Guarde a senha num gerenciador; ela é o <code>&lt;SENHA_RDS&gt;</code> das próximas fases. O <code>wait</code> e o endpoint vêm no passo 9.2.</p>
+        <div class="check"><div class="check-label">Checklist</div><ul>
+          <li><label><input type="checkbox"><span>RDS <code>bia</code> em <code>creating</code></span></label></li>
+        </ul></div>
+      </div>
+    </section>
+
+    <!-- ================================================================ F9 -->
+    <section class="phase" id="p9" data-group="Desafio 1" data-title="Cluster, task def e service">
+      <div class="phase-head">
+        <span class="phase-n">FASE 9</span>
+        <div>
+          <h2>ECS: cluster (Console), task definition e service (CLI)</h2>
+          <p>Cluster = capacidade. Task definition = a receita. Service = mantém a task viva.</p>
+        </div>
+        <span class="phase-count" data-count-for="p9"></span>
+      </div>
+
+      <div class="step" id="passo-9-1">
+        <div class="step-top"><a class="step-id" href="#passo-9-1">9.1</a><h3><code>cluster-bia</code> no Console (limitação) e validação na CLI</h3><span class="where w-console">CONSOLE + WSL</span></div>
+        <div class="out clicks"><span class="out-label">Console › ECS › Clusters › Create cluster</span><pre>Cluster name              cluster-bia
+Infrastructure            Fargate and Self-managed instances
+Auto Scaling group        Create new ASG · On-demand · Amazon Linux 2023
+EC2 instance type         t3.micro          ·  EC2 instance role  Create new role
+Desired capacity          Minimum 1 · Maximum 1
+Network                   VPC default · subnets us-east-1a e us-east-1b · SG existente bia-web
+Auto-assign public IP     Turn on
+Container Insights        Turned off        ·  Logging for ECS Exec  None
+Create</pre></div>
+        <div class="cmd"><span class="cmd-label">No WSL</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>aws ecs describe-clusters --clusters "$CLUSTER" --query 'clusters[0].[status,registeredContainerInstancesCount]' --output text</pre></div>
+        <div class="out good"><span class="out-label">Resposta esperada</span><pre>ACTIVE  1</pre></div>
+        <div class="check"><div class="check-label">Checklist</div><ul>
+          <li><label><input type="checkbox"><span><code>ACTIVE 1</code></span></label></li>
+        </ul></div>
+      </div>
+
+      <div class="step" id="passo-9-2">
+        <div class="step-top"><a class="step-id" href="#passo-9-2">9.2</a><h3>Registrar a <code>task-def-bia</code></h3><span class="where w-wsl">WSL</span></div>
+        <p>O JSON leva a senha, por isso vai para <code>/tmp</code> e é apagado logo depois.</p>
+        <div class="cmd"><span class="cmd-label">Comando</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>aws rds wait db-instance-available --db-instance-identifier "$RDS_ID"
+<span class="p">$ </span>ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+<span class="p">$ </span>RDS_HOST=$(aws rds describe-db-instances --db-instance-identifier "$RDS_ID" --query 'DBInstances[0].Endpoint.Address' --output text)
+<span class="p">$ </span>[ -z "$RDS_PWD" ] &amp;&amp; { read -rsp "Senha do RDS: " RDS_PWD; echo; }
+<span class="p">$ </span>cat &gt; /tmp/task-def-bia.json &lt;&lt;FIM
+{
+  "family": "$TASK_FAMILY",
+  "networkMode": "bridge",
+  "requiresCompatibilities": ["EC2"],
+  "runtimePlatform": { "cpuArchitecture": "X86_64", "operatingSystemFamily": "LINUX" },
+  "containerDefinitions": [{
+    "name": "bia",
+    "image": "$ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/bia:latest",
+    "essential": true,
+    "cpu": 1024,
+    "memoryReservation": 400,
+    "portMappings": [{ "name": "porta-80", "containerPort": 8080, "hostPort": 80, "protocol": "tcp" }],
+    "environment": [
+      { "name": "DB_USER", "value": "postgres" },
+      { "name": "DB_PWD",  "value": "$RDS_PWD" },
+      { "name": "DB_HOST", "value": "$RDS_HOST" },
+      { "name": "DB_PORT", "value": "5432" }
+    ]
+  }]
+}
+FIM
+<span class="p">$ </span>aws ecs register-task-definition --cli-input-json file:///tmp/task-def-bia.json --query 'taskDefinition.[family,revision]' --output text
+<span class="p">$ </span>rm -f /tmp/task-def-bia.json</pre></div>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Campo</th><th>O que resolve</th></tr></thead>
+          <tbody>
+            <tr><td><code>bridge</code> + <code>80 → 8080</code></td><td>API na 8080 dentro do container, exposta na 80 do host</td></tr>
+            <tr><td><code>cpu 1024</code> · <code>memoryReservation 400</code></td><td>Rule: 1 vCPU e soft limit de 400 MB, sem task size</td></tr>
+            <tr><td><code>environment</code></td><td>Lidas por <code>config/database.js</code>; host remoto liga SSL sozinho</td></tr>
+            <tr><td><code>&lt;&lt;FIM</code> sem aspas</td><td>Aqui o shell <b>deve</b> expandir as variáveis</td></tr>
+          </tbody>
+        </table></div>
+        <div class="out good"><span class="out-label">Resposta esperada</span><pre>task-def-bia    1</pre></div>
+        <p>Diferente do Console, este JSON não configura logs no CloudWatch. O diagnóstico do Kiro funciona sem eles, mas perde essa seção.</p>
+        <div class="check"><div class="check-label">Checklist</div><ul>
+          <li><label><input type="checkbox"><span>Revisão registrada; JSON apagado</span></label></li>
+        </ul></div>
+      </div>
+
+      <div class="step" id="passo-9-3">
+        <div class="step-top"><a class="step-id" href="#passo-9-3">9.3</a><h3>Criar o <code>service-bia</code> e testar a porta 80</h3><span class="where w-wsl">WSL</span></div>
+        <div class="cmd"><span class="cmd-label">Comando</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>aws ecs create-service --cluster "$CLUSTER" --service-name "$SERVICE" \
+  --task-definition "$TASK_FAMILY" --desired-count 1 --launch-type EC2 \
+  --deployment-configuration 'minimumHealthyPercent=0,maximumPercent=100,deploymentCircuitBreaker={enable=false,rollback=false}' \
+  --query 'service.status' --output text
+<span class="p">$ </span>aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE" &amp;&amp; echo ESTAVEL
+<span class="p">$ </span>CI_ARN=$(aws ecs list-container-instances --cluster "$CLUSTER" --query 'containerInstanceArns[0]' --output text)
+<span class="p">$ </span>ECS_EC2=$(aws ecs describe-container-instances --cluster "$CLUSTER" --container-instances "$CI_ARN" --query 'containerInstances[0].ec2InstanceId' --output text)
+<span class="p">$ </span>IP_ECS=$(aws ec2 describe-instances --instance-ids "$ECS_EC2" --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
+<span class="p">$ </span>echo "$IP_ECS" &amp;&amp; curl -s "http://$IP_ECS/api/versao"; echo</pre></div>
+        <div class="out good"><span class="out-label">Resposta esperada</span><pre>ACTIVE
+ESTAVEL
+&lt;IP_PUBLICO_ECS&gt;
+Bia 4.3.0</pre></div>
+        <p><code>minimumHealthyPercent=0</code> segue a aula (a rule diz 50%): com uma EC2 e a porta 80 fixa, a task antiga precisa sair para a nova subir. AZ rebalancing: <code>--availability-zone-rebalancing DISABLED</code> só existe em CLIs recentes; se o seu não conhecer, desligue em <i>Update service</i> no Console.</p>
+        <div class="check"><div class="check-label">Checklist</div><ul>
+          <li><label><input type="checkbox"><span><code>/api/versao</code> na porta 80 e IP anotado</span></label></li>
+        </ul></div>
+      </div>
+    </section>
+
+    <!-- ================================================================ F10 -->
+    <section class="phase" id="p10" data-group="Desafio 1" data-title="Migrations e deploy">
+      <div class="phase-head">
+        <span class="phase-n">FASE 10</span>
+        <div>
+          <h2>Migrations no RDS, botão novo e deploy</h2>
+          <p>A tabela no RDS, o front apontando para o ECS e o texto do botão.</p>
+        </div>
+        <span class="phase-count" data-count-for="p10"></span>
+      </div>
+
+      <div class="step" id="passo-10-1">
+        <div class="step-top"><a class="step-id" href="#passo-10-1">10.1</a><h3>Migrations a partir da <code>bia-dev</code></h3><span class="where w-ssm">BIA-DEV</span></div>
+        <p>No <code>compose.yml</code> (<code>nano compose.yml</code>): <code>DB_PWD: &lt;SENHA_RDS&gt;</code> e <code>DB_HOST: &lt;ENDPOINT_RDS&gt;</code>.</p>
+        <div class="cmd"><span class="cmd-label">Na bia-dev, em ~/bia</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>docker compose up -d
+<span class="p">$ </span>docker compose exec server bash -c 'npx sequelize db:create'
+<span class="p">$ </span>docker compose exec server bash -c 'npx sequelize db:migrate'
+<span class="p">$ </span>docker compose down &amp;&amp; git checkout -- compose.yml</pre></div>
+        <div class="out good"><span class="out-label">Resposta esperada</span><pre>Database bia created.
+== 20210924000838-criar-tarefas: migrated (0.0xxs)</pre></div>
+        <p><code>db:create</code>: o RDS nasce sem o database <code>bia</code> (na aula, o primeiro migrate falhou com <code>database "bia" does not exist</code>). O <code>git checkout</code> tira a senha do arquivo: o <code>.dockerignore</code> não exclui o <code>compose.yml</code>, e o próximo build a levaria para a imagem. Timeout = falta a regra do <code>bia-dev</code> no <code>bia-db</code> (8.2).</p>
+        <div class="check"><div class="check-label">Checklist</div><ul>
+          <li><label><input type="checkbox"><span>Migration aplicada e <code>compose.yml</code> restaurado</span></label></li>
+        </ul></div>
+      </div>
+
+      <div class="step" id="passo-10-2">
+        <div class="step-top"><a class="step-id" href="#passo-10-2">10.2</a><h3>IP do ECS no Dockerfile, texto do botão, commit e deploy</h3><span class="where w-ssm">BIA-DEV</span></div>
+        <div class="cmd"><span class="cmd-label">Na bia-dev, em ~/bia</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>IP_ECS=&lt;IP_PUBLICO_ECS&gt;
+<span class="p">$ </span>sed -i "s#VITE_API_URL=http://[^ ]*#VITE_API_URL=http://$IP_ECS#" Dockerfile
+<span class="p">$ </span>sed -i 's#Add New Task#&lt;TEXTO_DO_SEU_BOTAO&gt;#' client/src/components/AddTask.jsx
+<span class="p">$ </span>git add Dockerfile client/src/components/AddTask.jsx
+<span class="p">$ </span>git commit -m "ajuste no botao add task e api apontando para o ecs" &amp;&amp; git push origin main
+<span class="p">$ </span>ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+<span class="p">$ </span>cp scripts/ecs/unix/build.sh scripts/ecs/unix/deploy.sh .
+<span class="p">$ </span>sed -i "s#SEU_REGISTRY#$ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com#" build.sh
+<span class="p">$ </span>sed -i 's#\[SEU_CLUSTER\]#cluster-bia#; s#\[SEU_SERVICE\]#service-bia#' deploy.sh
+<span class="p">$ </span>chmod +x build.sh deploy.sh &amp;&amp; ./deploy.sh
+<span class="p">$ </span>aws ecs wait services-stable --cluster cluster-bia --services service-bia --region us-east-1 &amp;&amp; echo ESTAVEL</pre></div>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Trecho</th><th>O que faz</th></tr></thead>
+          <tbody>
+            <tr><td><code>VITE_API_URL=http://$IP_ECS</code></td><td>Front compilado chamando a API do ECS na 80 (sem porta)</td></tr>
+            <tr><td><code>build.sh</code></td><td>Login no ECR, build, tag <code>latest</code> e push (agora pela role da <code>bia-dev</code>)</td></tr>
+            <tr><td><code>update-service --force-new-deployment</code></td><td>Task nova, que puxa de novo a <code>latest</code></td></tr>
+          </tbody>
+        </table></div>
+        <div class="out good"><span class="out-label">Resposta esperada (final)</span><pre>ESTAVEL</pre></div>
+        <div class="check"><div class="check-label">Checklist</div><ul>
+          <li><label><input type="checkbox"><span>Commit feito e service estável com a imagem nova</span></label></li>
+        </ul></div>
+      </div>
+    </section>
+
+    <!-- ================================================================ F11 -->
+    <section class="phase" id="p11" data-group="Desafio 1" data-title="Entregas do Desafio 1">
+      <div class="phase-head">
+        <span class="phase-n">FASE 11</span>
+        <div>
+          <h2>Entregas: print na porta 80 e diagnóstico do Kiro</h2>
+          <p>Seu e-mail gravado pela interface, lido de volta do RDS, e o relatório do agente.</p>
+        </div>
+        <span class="phase-count" data-count-for="p11"></span>
+      </div>
+
+      <div class="step" id="passo-11-1">
+        <div class="step-top"><a class="step-id" href="#passo-11-1">11.1</a><h3>Entrega 1: e-mail cadastrado e print</h3><span class="where w-web">NAVEGADOR</span></div>
+        <div class="out clicks"><span class="out-label">Manual</span><pre>http://&lt;IP_PUBLICO_ECS&gt;  &gt;  tarefa  &lt;SEU_EMAIL&gt;  &gt;  clicar no botão novo
+Print: URL sem porta (80) · tarefa com o e-mail · botão com &lt;TEXTO_DO_SEU_BOTAO&gt;</pre></div>
+        <div class="cmd"><span class="cmd-label">Validar no WSL</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>curl -s "http://$IP_ECS/api/tarefas" | grep -o '"titulo":"[^"]*"'</pre></div>
+        <div class="check"><div class="check-label">Checklist</div><ul>
+          <li><label><input type="checkbox"><span>Print salvo e e-mail retornado pela API</span></label></li>
+        </ul></div>
+      </div>
+
+      <div class="step" id="passo-11-2">
+        <div class="step-top"><a class="step-id" href="#passo-11-2">11.2</a><h3>Entrega 2: diagnóstico do Kiro-CLI</h3><span class="where w-kiro">KIRO</span></div>
+        <div class="cmd"><span class="cmd-label">Na bia-dev, em ~/bia: kiro-cli chat --agent "bia" e o prompt da aula</span><button class="copy" type="button">copiar</button><pre>gere um diagnostico pra mim confirmando que minha aplicacao esta rodando corretamente no ecs e se
+comunicando com o rds para a entrega do meu desafio da imersao aws com ia</pre></div>
+        <div class="out good"><span class="out-label">O relatório precisa mostrar</span><pre>[ECS]       cluster-bia e service-bia ACTIVE · Desired 1 · Running 1 · Pending 0
+[Container] task-def-bia:N · bia:latest · 8080 -&gt; 80 · bridge · SG bia-web
+[RDS]       bia available · endpoint :5432
+[API]       /api/versao -&gt; "Bia 4.3.0" · /api/tarefas -&gt; dados do RDS (com o seu e-mail)</pre></div>
+        <p>Salve com <code>/copy</code> ou com um print. Mascare IP, IDs, endpoint e e-mail se for publicar.</p>
+        <div class="check"><div class="check-label">Entrega — Desafio 1</div><ul>
+          <li><label><input type="checkbox"><span>Print da BIA na porta 80 com e-mail e botão alterado</span></label></li>
+          <li><label><input type="checkbox"><span>Diagnóstico do Kiro com ECS, RDS e API OK</span></label></li>
+        </ul></div>
+      </div>
+    </section>
+
+    <div class="stage" id="etapa-d3"><span>Desafio 3</span><b>O front da BIA no S3, a API no ECS</b><p>O React vira arquivo estático num bucket; a API do Desafio 1 continua no ECS.</p></div>
+      <div class="ascii arch"><div class="arch-cap">Arquitetura: o que já existe, o que este desafio cria e o que vem depois</div><pre>
+<span class="d-done">+-- SUA VM · WSL 2 (Ubuntu) -----------------+   </span>+-- NAVEGADOR -----------------+  +-- GITHUB -------------------+
+<span class="d-done">| aws cli v2 · session-manager-plugin        |   </span>| <span class="d-done">http://IP_ECS (porta 80)     </span>|  | <span class="d-done">henrylle/bia (clone no WSL) </span>|
+<span class="d-done">| usuário IAM formacao_aws (aws login)       |   </span>| <span class="d-now">http://bucket.s3-website     </span>|  | <span class="d-done">fork · chave SSH da bia-dev </span>|
+<span class="d-done">| docker build + push -&gt; ECR (Dia 2)         |   </span>| <span class="d-todo">http://localhost:3002        </span>|  | <span class="d-done">commit do botão (git push)  </span>|
+<span class="d-done">| lancar_ec2_zona_a.sh -&gt; EC2 bia-dev        |   </span>+------------------------------+  +-----------------------------+
+<span class="d-done">| </span><span class="d-now">deploy.sh (react.sh + s3.sh) -&gt; S3         </span><span class="d-done">|                  </span>|
+<span class="d-done">| </span><span class="d-todo">01..04 porteiro · túneis 5433 / 3002       </span><span class="d-done">|                  </span>|
+<span class="d-done">+--------------------------------------------+                  </span>v  :80 · site · :3002
+   v  SSM · push ECR · sync S3 · túneis
++-- AWS CLOUD ---------------------------------------------------------------------------------------------------+
+| +-- IAM (global) ----------------------+  +-- CUSTOS --------------------------------------------------------+ |
+| | <span class="d-done">usuário formacao_aws + policies      </span>|  | <span class="d-done">Budget mensal (opcional) · sem NAT Gateway                       </span>| |
+| | <span class="d-done">role-acesso-ssm -&gt; EC2 (SSM, ECR...) </span>|  | cobram por hora: EC2, RDS e IPv4 público                         | |
+| +--------------------------------------+  +------------------------------------------------------------------+ |
+| +-- REGIÃO us-east-1 (N. Virginia) --------------------------------------------------------------------------+ |
+| | <span class="d-done">+-- SSM Session Manager -+ +-- ECR -----------------+ </span><span class="d-now">+-- S3 ------------------+ </span><span class="d-done">+-- ECS (controle) -----+ </span>| |
+| | <span class="d-done">| sessões na bia-dev     | | repositório bia        | </span><span class="d-now">| bucket site estático   | </span><span class="d-done">| cluster-bia           | </span>| |
+| | <span class="d-done">| </span><span class="d-todo">túneis do porteiro     </span><span class="d-done">| | imagem :latest         | </span><span class="d-now">| index.html + assets    | </span><span class="d-done">| service + task-def    | </span>| |
+| | <span class="d-done">+------------------------+ +------------------------+ </span><span class="d-now">+------------------------+ </span><span class="d-done">+-----------------------+ </span>| |
+| | +-- VPC default · 172.31.0.0/16 (já existe) -------------------------------------------------------------+ | |
+| | | [ IGW default ]  todas as subnets default são públicas                                                 | | |
+| | | +-- AZ us-east-1a --------------------------------+  +-- AZ us-east-1b ------------------------------+ | | |
+| | | | +-- SUBNET DEFAULT 1a ------------------------+ |  | +-- SUBNET DEFAULT 1b ----------------------+ | | | |
+| | | | | <span class="d-done">+-- EC2 bia-dev ----+  +-- EC2 cluster-bia +</span>| |  | | <span class="d-todo">+-- EC2 porteiro-bia -----+               </span>| | | | |
+| | | | | <span class="d-done">| SG bia-dev :3001  |  | SG bia-web :80    |</span>| |  | | <span class="d-todo">| SG bia-porteiro         |               </span>| | | | |
+| | | | | <span class="d-done">| role-acesso-ssm   |  | ASG + Launch Tmpl |</span>| |  | | <span class="d-todo">| sem porta de entrada    |               </span>| | | | |
+| | | | | <span class="d-done">| docker: BIA :3001 |  | task bia          |</span>| |  | | <span class="d-todo">| role-acesso-ssm         |               </span>| | | | |
+| | | | | <span class="d-done">| git · Kiro-CLI    |  | 80 -&gt; 8080        |</span>| |  | | <span class="d-todo">| túnel -&gt; RDS :5432      |               </span>| | | | |
+| | | | | <span class="d-done">| build/deploy.sh   |  | API + front       |</span>| |  | | <span class="d-todo">| túnel -&gt; BIA :80        |               </span>| | | | |
+| | | | | <span class="d-done">| migrations -&gt; RDS |  | pull ECR :latest  |</span>| |  | | <span class="d-todo">+-------------------------+               </span>| | | | |
+| | | | | <span class="d-done">+-------------------+  +-------------------+</span>| |  | |                                           | | | | |
+| | | | |                                             | |  | | <span class="d-todo">zona b · subnet default                   </span>| | | | |
+| | | | |                                             | |  | |                                           | | | | |
+| | | | |                                             | |  | |                                           | | | | |
+| | | | | <span class="d-done">+-- RDS bia · PostgreSQL (público) --------+</span>| |  | |                                           | | | | |
+| | | | | <span class="d-done">| SG bia-db :5432 &lt;- bia-web, bia-dev      |</span>| |  | |                                           | | | | |
+| | | | | <span class="d-done">|                 </span><span class="d-todo">&lt;- bia-porteiro          </span><span class="d-done">|</span>| |  | |                                           | | | | |
+| | | | | <span class="d-done">| database bia · tabela "Tarefas"          |</span>| |  | |                                           | | | | |
+| | | | | <span class="d-done">|                                          |</span>| |  | |                                           | | | | |
+| | | | | <span class="d-done">+------------------------------------------+</span>| |  | |                                           | | | | |
+| | | | |                                             | |  | |                                           | | | | |
+| | | | +---------------------------------------------+ |  | +-------------------------------------------+ | | | |
+| | | +-------------------------------------------------+  +-----------------------------------------------+ | | |
+| | +--------------------------------------------------------------------------------------------------------+ | |
+| +------------------------------------------------------------------------------------------------------------+ |
++----------------------------------------------------------------------------------------------------------------+
+</pre><div class="arch-leg"><span class="d-done">■ já feito</span><span class="d-now">■ Desafio 3 (agora)</span><span class="d-todo">■ próximos desafios</span></div><div class="arch-cap">Os desafios e onde este se encaixa</div><pre class="arch-ch">
+Desafios da Fase: Fundamentais
+
+<span class="d-done">Desafio 1 (Parte 2) — fazer os desafios do dia 1 e 2 da bia da sua VM</span>
+<span class="d-done">  DIA 1</span>
+<span class="d-done">    • Lançar máquina bia-dev (rodar a BIA na sua VM)</span>
+<span class="d-done">    • Configurar permissões IAM para o usuário ao invés da role</span>
+<span class="d-done">    • Testar comunicação com o ECR</span>
+<span class="d-done">  DIA 2</span>
+<span class="d-done">    • Fazer build da sua VM</span>
+<span class="d-done">    • Fazer push para o ECR da sua VM</span>
+
+<span class="d-now">Desafio 3</span>
+<span class="d-now">    • Criar um bucket para servir o site da bia de forma estática</span>
+<span class="d-now">    • Criar um script Shell para gerar os assets do react da BIA</span>
+<span class="d-now">        o O endereço da api deve ser passado por argumento</span>
+<span class="d-now">    • Fazer um sync do seu diretório local com o bucket no s3</span>
+<span class="d-now">    • Rodar o desafio da BIA no dia 2 para servir como API para o projeto do S3</span>
+<span class="d-now">    • Salvar um registro em banco por esse site</span>
+
+<span class="d-todo">Desafio 4</span>
+<span class="d-todo">    • Crie script que lance o porteiro na zona b (subnet default)</span>
+<span class="d-todo">    • Crie script que inicie o porteiro com túnel para o RDS na porta local 5433</span>
+<span class="d-todo">        o Estabeleça comunicação, insira 1 registro manualmente no banco</span>
+<span class="d-todo">    • Crie túnel para bia e conecte nela na porta 3002 para ver o registro que foi adicionado</span>
+<span class="d-todo">    • Crie script que para a máquina do porteiro</span>
+
+<span class="d-done">Desafios da Fase: Preparatórios (Desafio 1)</span>
+<span class="d-done">    • Print da BIA rodando na porta 80 na AWS com seu email cadastrado e texto do botão alterado</span>
+<span class="d-done">    • Diagnóstico do KIRO-CLI que nosso projeto está rodando corretamente no ECS</span>
+</pre></div>
+
+    <!-- ================================================================ F12 -->
+    <section class="phase" id="p12" data-group="Desafio 3" data-title="Bucket do site">
+      <div class="phase-head">
+        <span class="phase-n">FASE 12</span>
+        <div>
+          <h2>O bucket como servidor de site estático</h2>
+          <p>Liberar o acesso público, ligar o website hosting e uma policy só de leitura.</p>
+        </div>
+        <span class="phase-count" data-count-for="p12"></span>
+      </div>
+
+      <div class="step" id="passo-12-1">
+        <div class="step-top"><a class="step-id" href="#passo-12-1">12.1</a><h3><code>AmazonS3FullAccess</code> no usuário (limitação: Console)</h3><span class="where w-console">CONSOLE</span></div>
+        <div class="out clicks"><span class="out-label">Console (administrador) ›</span><pre>IAM  &gt;  Users  &gt;  formacao_aws  &gt;  Add permissions  &gt;  Attach policies directly  &gt;  AmazonS3FullAccess</pre></div>
+        <div class="check"><div class="check-label">Checklist</div><ul>
+          <li><label><input type="checkbox"><span>Policy de S3 no usuário</span></label></li>
+        </ul></div>
+      </div>
+
+      <div class="step" id="passo-12-2">
+        <div class="step-top"><a class="step-id" href="#passo-12-2">12.2</a><h3>Criar e configurar o bucket</h3><span class="where w-wsl">WSL</span></div>
+        <div class="cmd"><span class="cmd-label">Comando</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>source ~/DESAFIO1/desafio1.sh
+<span class="p">$ </span>aws s3api create-bucket --bucket "$BUCKET_NAME"
+<span class="p">$ </span>aws s3api put-public-access-block --bucket "$BUCKET_NAME" \
+  --public-access-block-configuration BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=false,RestrictPublicBuckets=false
+<span class="p">$ </span>aws s3 website "s3://$BUCKET_NAME" --index-document index.html --error-document index.html
+<span class="p">$ </span>aws s3api put-bucket-policy --bucket "$BUCKET_NAME" --policy '{
+  "Version": "2012-10-17",
+  "Statement": [{ "Sid": "PublicReadGetObject", "Effect": "Allow", "Principal": "*",
+                  "Action": ["s3:GetObject"], "Resource": ["arn:aws:s3:::'"$BUCKET_NAME"'/*"] }]
+}'
+<span class="p">$ </span>aws s3api get-bucket-policy-status --bucket "$BUCKET_NAME" --query 'PolicyStatus.IsPublic' --output text</pre></div>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Comando</th><th>Equivale no Console a</th></tr></thead>
+          <tbody>
+            <tr><td><code>create-bucket</code> (sem <code>LocationConstraint</code>)</td><td>Create bucket em us-east-1 (a região padrão dispensa o parâmetro)</td></tr>
+            <tr><td><code>put-public-access-block ...=false</code></td><td>Desmarcar <i>Block all public access</i></td></tr>
+            <tr><td><code>s3 website --index-document</code></td><td>Static website hosting = index.html. O error document igual deixa as rotas do React funcionarem ao recarregar (não está na aula)</td></tr>
+            <tr><td><code>put-bucket-policy</code></td><td>Leitura (<code>GetObject</code>) pública dos objetos; nada de listar ou gravar</td></tr>
+          </tbody>
+        </table></div>
+        <div class="out good"><span class="out-label">Resposta esperada</span><pre>{ "Location": "/&lt;NOME_UNICO_DO_BUCKET&gt;" }
+True</pre></div>
+        <p><code>BucketAlreadyExists</code>: o nome já é de outra conta; troque o <code>BUCKET_NAME</code> no arquivo de variáveis.</p>
+        <div class="check"><div class="check-label">Checklist</div><ul>
+          <li><label><input type="checkbox"><span>Bucket público só para leitura, com website hosting</span></label></li>
+        </ul></div>
+      </div>
+    </section>
+
+    <!-- ================================================================ F13 -->
+    <section class="phase" id="p13" data-group="Desafio 3" data-title="Scripts, deploy e registro">
+      <div class="phase-head">
+        <span class="phase-n">FASE 13</span>
+        <div>
+          <h2>Scripts shell, deploy com a URL da API e registro pelo site</h2>
+          <p>Estrutura da aula: <code>react.sh</code> (build), <code>s3.sh</code> (envio) e <code>deploy.sh</code> (valida e orquestra). Explicação linha a linha: F20 do guia híbrido.</p>
+        </div>
+        <span class="phase-count" data-count-for="p13"></span>
+      </div>
+
+      <div class="step" id="passo-13-1">
+        <div class="step-top"><a class="step-id" href="#passo-13-1">13.1</a><h3>Criar os três scripts</h3><span class="where w-wsl">WSL</span></div>
+        <div class="cmd"><span class="cmd-label">Comando</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>mkdir -p ~/DESAFIO1/desafio3 &amp;&amp; cd ~/DESAFIO1/desafio3
+<span class="p">$ </span>cat &gt; react.sh &lt;&lt;'FIM'
+#!/usr/bin/env bash
+# Uso interno: build &lt;URL_DA_API&gt;
+function build() {
+  local API_URL="$1"
+  echo "Fazendo build do react... (API: $API_URL)"
+  cd "$BIA_DIR" || return 1
+  npm install --loglevel=error
+  npm install --prefix client --legacy-peer-deps --loglevel=error
+  VITE_API_URL="$API_URL" npm run build --prefix client
+  cd - &gt; /dev/null
+}
+FIM
+<span class="p">$ </span>cat &gt; s3.sh &lt;&lt;'FIM'
+#!/usr/bin/env bash
+# Uso interno: envio_s3 &lt;NOME_DO_BUCKET&gt;
+function envio_s3() {
+  echo "Fazendo envio para o s3..."
+  aws s3 sync "$BIA_DIR/client/build/" "s3://$1/" --delete --profile formacao_aws
+}
+FIM
+<span class="p">$ </span>cat &gt; deploy.sh &lt;&lt;'FIM'
+#!/usr/bin/env bash
+# Uso: ./deploy.sh &lt;hom|prd&gt; &lt;URL_DA_API&gt;
+set -e
+AMBIENTE="$1"; API_URL="$2"
+BUCKET_NAME="${BUCKET_NAME:?defina BUCKET_NAME (source ~/DESAFIO1/desafio1.sh)}"
+BIA_DIR="${BIA_DIR:-$HOME/bia}"
+if [ "$AMBIENTE" != "hom" ] &amp;&amp; [ "$AMBIENTE" != "prd" ]; then echo "Ambiente invalido"; exit 1; fi
+if [ -z "$API_URL" ]; then echo "Erro: informe a URL da API"; exit 1; fi
+cd "$(dirname "$0")"; export BIA_DIR
+. ./react.sh
+. ./s3.sh
+echo "Vou iniciar deploy no ambiente: $AMBIENTE - API: $API_URL"
+build "$API_URL"
+envio_s3 "$BUCKET_NAME"
+echo "Finalizado. Site: http://$BUCKET_NAME.s3-website-us-east-1.amazonaws.com"
+FIM
+<span class="p">$ </span>chmod +x *.sh
+<span class="p">$ </span>./deploy.sh; ./deploy.sh dev http://1.2.3.4; ./deploy.sh hom</pre></div>
+        <div class="out good"><span class="out-label">Resposta esperada (as validações)</span><pre>Ambiente invalido
+Ambiente invalido
+Erro: informe a URL da API</pre></div>
+        <p>A URL vai para <code>VITE_API_URL</code> (Vite, como no <code>Dockerfile</code>), e não para o <code>REACT_APP_API_URL</code> da aula. Com a variável errada, o build passa e o site aponta para <code>localhost</code>.</p>
+        <div class="check"><div class="check-label">Checklist</div><ul>
+          <li><label><input type="checkbox"><span>Scripts criados e as três chamadas erradas recusadas</span></label></li>
+        </ul></div>
+      </div>
+
+      <div class="step" id="passo-13-2">
+        <div class="step-top"><a class="step-id" href="#passo-13-2">13.2</a><h3>Deploy, provas e o registro pelo site</h3><span class="where w-wsl">WSL + NAVEGADOR</span></div>
+        <div class="cmd"><span class="cmd-label">Comando</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>curl -s "http://&lt;IP_PUBLICO_ECS&gt;/api/versao"; echo
+<span class="p">$ </span>./deploy.sh hom http://&lt;IP_PUBLICO_ECS&gt;
+<span class="p">$ </span>grep -rho "&lt;IP_PUBLICO_ECS&gt;" ~/bia/client/build/assets | head -1
+<span class="p">$ </span>aws s3 ls "s3://$BUCKET_NAME" --recursive
+<span class="p">$ </span>curl -s -o /dev/null -w "%{http_code}\n" "http://$BUCKET_NAME.s3-website-us-east-1.amazonaws.com"</pre></div>
+        <div class="out good"><span class="out-label">Resposta esperada (final)</span><pre>Bia 4.3.0
+... upload: .../client/build/index.html to s3://&lt;BUCKET&gt;/index.html
+Finalizado. Site: http://&lt;BUCKET&gt;.s3-website-us-east-1.amazonaws.com
+&lt;IP_PUBLICO_ECS&gt;
+... index.html · assets/index-xxxx.js · assets/index-xxxx.css
+200</pre></div>
+        <div class="out clicks"><span class="out-label">Navegador</span><pre>http://&lt;NOME_UNICO_DO_BUCKET&gt;.s3-website-us-east-1.amazonaws.com  &gt;  tarefa "Desafio 3 - salvo pelo site do S3"</pre></div>
+        <div class="cmd"><span class="cmd-label">Conferir pela API</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>curl -s "http://&lt;IP_PUBLICO_ECS&gt;/api/tarefas" | grep -o '"titulo":"[^"]*"'</pre></div>
+        <p>A API tem <code>cors()</code> (<code>config/express.js</code>), por isso aceita chamadas da origem do S3. Se o IP do ECS mudar, rode o <code>./deploy.sh</code> de novo com o IP novo.</p>
+        <div class="check"><div class="check-label">Entrega — Desafio 3</div><ul>
+          <li><label><input type="checkbox"><span>Bucket servindo o site (F12)</span></label></li>
+          <li><label><input type="checkbox"><span>Script com a URL da API por argumento + sync (F13)</span></label></li>
+          <li><label><input type="checkbox"><span>API do ECS servindo o site e registro salvo, com print</span></label></li>
+        </ul></div>
+      </div>
+    </section>
+
+    <div class="stage" id="etapa-d4"><span>Desafio 4</span><b>Porteiro na zona b e túneis SSM</b><p>Os seus quatro scripts de <code>Desafios/</code>, sem alteração: na VPC default, "subnet default da zona b" existe de verdade.</p></div>
+      <div class="ascii arch"><div class="arch-cap">Arquitetura: o que já existe, o que este desafio cria e o que vem depois</div><pre>
+<span class="d-done">+-- SUA VM · WSL 2 (Ubuntu) -----------------+   </span>+-- NAVEGADOR -----------------+  +-- GITHUB -------------------+
+<span class="d-done">| aws cli v2 · session-manager-plugin        |   </span>| <span class="d-done">http://IP_ECS (porta 80)     </span>|  | <span class="d-done">henrylle/bia (clone no WSL) </span>|
+<span class="d-done">| usuário IAM formacao_aws (aws login)       |   </span>| <span class="d-done">http://bucket.s3-website     </span>|  | <span class="d-done">fork · chave SSH da bia-dev </span>|
+<span class="d-done">| docker build + push -&gt; ECR (Dia 2)         |   </span>| <span class="d-now">http://localhost:3002        </span>|  | <span class="d-done">commit do botão (git push)  </span>|
+<span class="d-done">| lancar_ec2_zona_a.sh -&gt; EC2 bia-dev        |   </span>+------------------------------+  +-----------------------------+
+<span class="d-done">| deploy.sh (react.sh + s3.sh) -&gt; S3         |                  </span>|
+<span class="d-done">| </span><span class="d-now">01..04 porteiro · túneis 5433 / 3002       </span><span class="d-done">|                  </span>|
+<span class="d-done">+--------------------------------------------+                  </span>v  :80 · site · :3002
+   v  SSM · push ECR · sync S3 · túneis
++-- AWS CLOUD ---------------------------------------------------------------------------------------------------+
+| +-- IAM (global) ----------------------+  +-- CUSTOS --------------------------------------------------------+ |
+| | <span class="d-done">usuário formacao_aws + policies      </span>|  | <span class="d-done">Budget mensal (opcional) · sem NAT Gateway                       </span>| |
+| | <span class="d-done">role-acesso-ssm -&gt; EC2 (SSM, ECR...) </span>|  | cobram por hora: EC2, RDS e IPv4 público                         | |
+| +--------------------------------------+  +------------------------------------------------------------------+ |
+| +-- REGIÃO us-east-1 (N. Virginia) --------------------------------------------------------------------------+ |
+| | <span class="d-done">+-- SSM Session Manager -+ +-- ECR -----------------+ +-- S3 ------------------+ +-- ECS (controle) -----+ </span>| |
+| | <span class="d-done">| sessões na bia-dev     | | repositório bia        | | bucket site estático   | | cluster-bia           | </span>| |
+| | <span class="d-done">| </span><span class="d-now">túneis do porteiro     </span><span class="d-done">| | imagem :latest         | | index.html + assets    | | service + task-def    | </span>| |
+| | <span class="d-done">+------------------------+ +------------------------+ +------------------------+ +-----------------------+ </span>| |
+| | +-- VPC default · 172.31.0.0/16 (já existe) -------------------------------------------------------------+ | |
+| | | [ IGW default ]  todas as subnets default são públicas                                                 | | |
+| | | +-- AZ us-east-1a --------------------------------+  +-- AZ us-east-1b ------------------------------+ | | |
+| | | | +-- SUBNET DEFAULT 1a ------------------------+ |  | +-- SUBNET DEFAULT 1b ----------------------+ | | | |
+| | | | | <span class="d-done">+-- EC2 bia-dev ----+  +-- EC2 cluster-bia +</span>| |  | | <span class="d-now">+-- EC2 porteiro-bia -----+               </span>| | | | |
+| | | | | <span class="d-done">| SG bia-dev :3001  |  | SG bia-web :80    |</span>| |  | | <span class="d-now">| SG bia-porteiro         |               </span>| | | | |
+| | | | | <span class="d-done">| role-acesso-ssm   |  | ASG + Launch Tmpl |</span>| |  | | <span class="d-now">| sem porta de entrada    |               </span>| | | | |
+| | | | | <span class="d-done">| docker: BIA :3001 |  | task bia          |</span>| |  | | <span class="d-now">| role-acesso-ssm         |               </span>| | | | |
+| | | | | <span class="d-done">| git · Kiro-CLI    |  | 80 -&gt; 8080        |</span>| |  | | <span class="d-now">| túnel -&gt; RDS :5432      |               </span>| | | | |
+| | | | | <span class="d-done">| build/deploy.sh   |  | API + front       |</span>| |  | | <span class="d-now">| túnel -&gt; BIA :80        |               </span>| | | | |
+| | | | | <span class="d-done">| migrations -&gt; RDS |  | pull ECR :latest  |</span>| |  | | <span class="d-now">+-------------------------+               </span>| | | | |
+| | | | | <span class="d-done">+-------------------+  +-------------------+</span>| |  | |                                           | | | | |
+| | | | |                                             | |  | | <span class="d-now">zona b · subnet default                   </span>| | | | |
+| | | | |                                             | |  | |                                           | | | | |
+| | | | |                                             | |  | |                                           | | | | |
+| | | | | <span class="d-done">+-- RDS bia · PostgreSQL (público) --------+</span>| |  | |                                           | | | | |
+| | | | | <span class="d-done">| SG bia-db :5432 &lt;- bia-web, bia-dev      |</span>| |  | |                                           | | | | |
+| | | | | <span class="d-done">|                 </span><span class="d-now">&lt;- bia-porteiro          </span><span class="d-done">|</span>| |  | |                                           | | | | |
+| | | | | <span class="d-done">| database bia · tabela "Tarefas"          |</span>| |  | |                                           | | | | |
+| | | | | <span class="d-done">|                                          |</span>| |  | |                                           | | | | |
+| | | | | <span class="d-done">+------------------------------------------+</span>| |  | |                                           | | | | |
+| | | | |                                             | |  | |                                           | | | | |
+| | | | +---------------------------------------------+ |  | +-------------------------------------------+ | | | |
+| | | +-------------------------------------------------+  +-----------------------------------------------+ | | |
+| | +--------------------------------------------------------------------------------------------------------+ | |
+| +------------------------------------------------------------------------------------------------------------+ |
++----------------------------------------------------------------------------------------------------------------+
+</pre><div class="arch-leg"><span class="d-done">■ já feito</span><span class="d-now">■ Desafio 4 (agora)</span><span class="d-todo">■ próximos desafios</span></div><div class="arch-cap">Os desafios e onde este se encaixa</div><pre class="arch-ch">
+Desafios da Fase: Fundamentais
+
+<span class="d-done">Desafio 1 (Parte 2) — fazer os desafios do dia 1 e 2 da bia da sua VM</span>
+<span class="d-done">  DIA 1</span>
+<span class="d-done">    • Lançar máquina bia-dev (rodar a BIA na sua VM)</span>
+<span class="d-done">    • Configurar permissões IAM para o usuário ao invés da role</span>
+<span class="d-done">    • Testar comunicação com o ECR</span>
+<span class="d-done">  DIA 2</span>
+<span class="d-done">    • Fazer build da sua VM</span>
+<span class="d-done">    • Fazer push para o ECR da sua VM</span>
+
+<span class="d-done">Desafio 3</span>
+<span class="d-done">    • Criar um bucket para servir o site da bia de forma estática</span>
+<span class="d-done">    • Criar um script Shell para gerar os assets do react da BIA</span>
+<span class="d-done">        o O endereço da api deve ser passado por argumento</span>
+<span class="d-done">    • Fazer um sync do seu diretório local com o bucket no s3</span>
+<span class="d-done">    • Rodar o desafio da BIA no dia 2 para servir como API para o projeto do S3</span>
+<span class="d-done">    • Salvar um registro em banco por esse site</span>
+
+<span class="d-now">Desafio 4</span>
+<span class="d-now">    • Crie script que lance o porteiro na zona b (subnet default)</span>
+<span class="d-now">    • Crie script que inicie o porteiro com túnel para o RDS na porta local 5433</span>
+<span class="d-now">        o Estabeleça comunicação, insira 1 registro manualmente no banco</span>
+<span class="d-now">    • Crie túnel para bia e conecte nela na porta 3002 para ver o registro que foi adicionado</span>
+<span class="d-now">    • Crie script que para a máquina do porteiro</span>
+
+<span class="d-done">Desafios da Fase: Preparatórios (Desafio 1)</span>
+<span class="d-done">    • Print da BIA rodando na porta 80 na AWS com seu email cadastrado e texto do botão alterado</span>
+<span class="d-done">    • Diagnóstico do KIRO-CLI que nosso projeto está rodando corretamente no ECS</span>
+</pre></div>
+
+    <!-- ================================================================ F14 -->
+    <section class="phase" id="p14" data-group="Desafio 4" data-title="Porteiro por script">
+      <div class="phase-head">
+        <span class="phase-n">FASE 14</span>
+        <div>
+          <h2>Entrega 1: lançar o porteiro e abrir o banco para ele</h2>
+          <p>O porteiro não tem porta aberta nem key pair; só responde a quem tem SSM no IAM.</p>
+        </div>
+        <span class="phase-count" data-count-for="p14"></span>
+      </div>
+
+      <div class="step" id="passo-14-1">
+        <div class="step-top"><a class="step-id" href="#passo-14-1">14.1</a><h3>Trazer os scripts e lançar</h3><span class="where w-wsl">WSL</span></div>
+        <div class="cmd"><span class="cmd-label">Comando — troque o caminho pelo da sua pasta Desafios</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>mkdir -p ~/DESAFIO1/desafio4 &amp;&amp; cd ~/DESAFIO1/desafio4
+<span class="p">$ </span>D="/mnt/c/Users/&lt;SEU_USUARIO_WINDOWS&gt;/&lt;CAMINHO_ATE&gt;/Desafio 1/GitHub/Desafios"
+<span class="p">$ </span>cp "$D/01-lancar-porteiro-zona-b.sh" "$D/02-iniciar-porteiro-tunel-rds.sh" "$D/03-tunel-bia.sh" "$D/04-parar-porteiro.sh" .
+<span class="p">$ </span>sed -i 's/\r$//' *.sh &amp;&amp; chmod +x *.sh
+<span class="p">$ </span>source ~/DESAFIO1/desafio1.sh &amp;&amp; ./01-lancar-porteiro-zona-b.sh "$PORTEIRO"</pre></div>
+        <div class="out good"><span class="out-label">Resposta esperada</span><pre>Criando o security group bia-porteiro
+Zona:   us-east-1b
+Subnet: subnet-xxxx (VPC vpc-xxxx)
+Porteiro lancado: i-xxxxxxxxxxxxxxxxx
+Pronto: porteiro-bia esta running na zona us-east-1b</pre></div>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Script</th><th>O que faz</th></tr></thead>
+          <tbody>
+            <tr><td><code>01</code></td><td>Não duplica; subnet <code>default-for-az</code> da zona b; AMI AL2023 via SSM; SG <code>bia-porteiro</code> sem entrada; <code>role-acesso-ssm</code>; IMDSv2; espera running</td></tr>
+            <tr><td><code>02</code></td><td>Liga se parado, espera SSM Online, lê o endpoint do RDS, túnel 5433 → 5432 (<code>...ToRemoteHost</code>)</td></tr>
+            <tr><td><code>03</code></td><td>Exige o porteiro de pé; túnel 3002 → host:80</td></tr>
+            <tr><td><code>04</code></td><td>Para se estiver running; se já parado, não é erro</td></tr>
+          </tbody>
+        </table></div>
+        <div class="check"><div class="check-label">Checklist</div><ul>
+          <li><label><input type="checkbox"><span><code>porteiro-bia</code> running na us-east-1b</span></label></li>
+        </ul></div>
+      </div>
+
+      <div class="step" id="passo-14-2">
+        <div class="step-top"><a class="step-id" href="#passo-14-2">14.2</a><h3>Liberar a 5432 do <code>bia-db</code> para o <code>bia-porteiro</code></h3><span class="where w-wsl">WSL</span></div>
+        <div class="cmd"><span class="cmd-label">Comando</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>SG_DB=$(aws ec2 describe-security-groups --filters Name=group-name,Values=bia-db --query 'SecurityGroups[0].GroupId' --output text)
+<span class="p">$ </span>SG_PORT=$(aws ec2 describe-security-groups --filters Name=group-name,Values=bia-porteiro --query 'SecurityGroups[0].GroupId' --output text)
+<span class="p">$ </span>aws ec2 authorize-security-group-ingress --group-id "$SG_DB" --ip-permissions \
+  '[{"IpProtocol":"tcp","FromPort":5432,"ToPort":5432,"UserIdGroupPairs":[{"GroupId":"'"$SG_PORT"'","Description":"acesso vindo de bia-porteiro"}]}]'</pre></div>
+        <p>O túnel entrega o tráfego ao banco <b>a partir do porteiro</b>. Sem esta regra, o <code>psql</code> fica em timeout. Para a BIA nada muda: o <code>bia-web</code> já aceita a 80.</p>
+        <div class="check"><div class="check-label">Checklist</div><ul>
+          <li><label><input type="checkbox"><span><code>bia-db</code> aceita <code>bia-web</code>, <code>bia-dev</code> e <code>bia-porteiro</code></span></label></li>
+        </ul></div>
+      </div>
+    </section>
+
+    <!-- ================================================================ F15 -->
+    <section class="phase" id="p15" data-group="Desafio 4" data-title="Túneis, INSERT e parar">
+      <div class="phase-head">
+        <span class="phase-n">FASE 15</span>
+        <div>
+          <h2>Entregas 2 a 4: túnel do RDS + INSERT, túnel da BIA e parar</h2>
+          <p>Cada túnel prende a aba onde roda: RDS na T2, BIA na T3, comandos na T1.</p>
+        </div>
+        <span class="phase-count" data-count-for="p15"></span>
+      </div>
+
+      <div class="step" id="passo-15-1">
+        <div class="step-top"><a class="step-id" href="#passo-15-1">15.1</a><h3>Túnel do banco e o registro manual</h3><span class="where w-wsl">WSL · T2 + T1</span></div>
+        <div class="cmd"><span class="cmd-label">T2 (nova aba)</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>source ~/DESAFIO1/desafio1.sh &amp;&amp; cd ~/DESAFIO1/desafio4
+<span class="p">$ </span>./02-iniciar-porteiro-tunel-rds.sh "$PORTEIRO" "$RDS_ID" "$PORTA_RDS_LOCAL"</pre></div>
+        <div class="cmd"><span class="cmd-label">T1 (pede a &lt;SENHA_RDS&gt;)</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>psql "host=localhost port=5433 dbname=bia user=postgres sslmode=require"
+<span class="p">bia=&gt; </span>SELECT titulo FROM "Tarefas";
+<span class="p">bia=&gt; </span>INSERT INTO "Tarefas" (uuid, titulo, importante, "createdAt", "updatedAt")
+VALUES (gen_random_uuid(), 'Registro manual pelo tunel SSM - Desafio 4', true, NOW(), NOW())
+RETURNING uuid, titulo;
+<span class="p">bia=&gt; </span>\q</pre></div>
+        <div class="out good"><span class="out-label">Resposta esperada</span><pre>(T2) Port 5433 opened for sessionId formacao_aws-xxxx. Waiting for connections...
+(T1) INSERT 0 1</pre></div>
+        <p>Aspas duplas porque o Sequelize criou <code>"Tarefas"</code> e <code>"createdAt"</code> com maiúsculas. <code>gen_random_uuid()</code> porque a chave <code>uuid</code> não tem default no banco.</p>
+        <div class="check"><div class="check-label">Checklist</div><ul>
+          <li><label><input type="checkbox"><span><code>INSERT 0 1</code></span></label></li>
+        </ul></div>
+      </div>
+
+      <div class="step" id="passo-15-2">
+        <div class="step-top"><a class="step-id" href="#passo-15-2">15.2</a><h3>Túnel da BIA na 3002 e parar o porteiro</h3><span class="where w-wsl">WSL · T3 + T1</span></div>
+        <div class="cmd"><span class="cmd-label">T3 (nova aba)</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>source ~/DESAFIO1/desafio1.sh &amp;&amp; cd ~/DESAFIO1/desafio4
+<span class="p">$ </span>CI_ARN=$(aws ecs list-container-instances --cluster "$CLUSTER" --query 'containerInstanceArns[0]' --output text)
+<span class="p">$ </span>ECS_EC2=$(aws ecs describe-container-instances --cluster "$CLUSTER" --container-instances "$CI_ARN" --query 'containerInstances[0].ec2InstanceId' --output text)
+<span class="p">$ </span>BIA_HOST=$(aws ec2 describe-instances --instance-ids "$ECS_EC2" --query 'Reservations[0].Instances[0].PrivateIpAddress' --output text)
+<span class="p">$ </span>./03-tunel-bia.sh "$PORTEIRO" "$BIA_HOST" 80 "$PORTA_BIA_LOCAL"</pre></div>
+        <div class="cmd"><span class="cmd-label">T1</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>curl -s http://localhost:3002/api/tarefas | grep -o '"titulo":"[^"]*"'</pre></div>
+        <div class="out good"><span class="out-label">Resposta esperada</span><pre>"titulo":"&lt;SEU_EMAIL&gt;"
+"titulo":"Desafio 3 - salvo pelo site do S3"
+"titulo":"Registro manual pelo tunel SSM - Desafio 4"</pre></div>
+        <p>Print da entrega: <code>http://localhost:3002</code> no navegador. A página vem pelo túnel; a lista é buscada pelo JavaScript no IP público do ECS (compilado na F10), mas é o mesmo banco. A prova que passa só pelo túnel é o <code>curl</code>. Depois, <kbd>Ctrl</kbd>+<kbd>C</kbd> na T2 e na T3, e na T1:</p>
+        <div class="cmd"><span class="cmd-label">T1</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>cd ~/DESAFIO1/desafio4 &amp;&amp; ./04-parar-porteiro.sh "$PORTEIRO" &amp;&amp; ./04-parar-porteiro.sh "$PORTEIRO"</pre></div>
+        <div class="out good"><span class="out-label">Resposta esperada</span><pre>Parando o porteiro i-xxxx
+Porteiro porteiro-bia parado
+Porteiro i-xxxx ja esta 'stopped' - nada a fazer</pre></div>
+        <div class="check"><div class="check-label">Entrega — Desafio 4</div><ul>
+          <li><label><input type="checkbox"><span>Script que lança o porteiro na zona b (<code>01</code>)</span></label></li>
+          <li><label><input type="checkbox"><span>Script que inicia o porteiro com túnel 5433 + 1 registro manual (<code>02</code> + psql)</span></label></li>
+          <li><label><input type="checkbox"><span>Túnel para a BIA na 3002 mostrando o registro (<code>03</code>)</span></label></li>
+          <li><label><input type="checkbox"><span>Script que para o porteiro (<code>04</code>)</span></label></li>
+        </ul></div>
+      </div>
+    </section>
+
+    <div class="stage" id="etapa-fim"><span>Encerramento</span><b>Pausar ou apagar</b><p>Pausar mantém tudo para a próxima aula; o Anexo A apaga na ordem certa.</p></div>
+      <div class="ascii arch"><div class="arch-cap">Arquitetura completa, antes de pausar ou apagar</div><pre>
+<span class="d-done">+-- SUA VM · WSL 2 (Ubuntu) -----------------+   </span>+-- NAVEGADOR -----------------+  +-- GITHUB -------------------+
+<span class="d-done">| aws cli v2 · session-manager-plugin        |   </span>| <span class="d-done">http://IP_ECS (porta 80)     </span>|  | <span class="d-done">henrylle/bia (clone no WSL) </span>|
+<span class="d-done">| usuário IAM formacao_aws (aws login)       |   </span>| <span class="d-done">http://bucket.s3-website     </span>|  | <span class="d-done">fork · chave SSH da bia-dev </span>|
+<span class="d-done">| docker build + push -&gt; ECR (Dia 2)         |   </span>| <span class="d-done">http://localhost:3002        </span>|  | <span class="d-done">commit do botão (git push)  </span>|
+<span class="d-done">| lancar_ec2_zona_a.sh -&gt; EC2 bia-dev        |   </span>+------------------------------+  +-----------------------------+
+<span class="d-done">| deploy.sh (react.sh + s3.sh) -&gt; S3         |                  </span>|
+<span class="d-done">| 01..04 porteiro · túneis 5433 / 3002       |                  </span>|
+<span class="d-done">+--------------------------------------------+                  </span>v  :80 · site · :3002
+   v  SSM · push ECR · sync S3 · túneis
++-- AWS CLOUD ---------------------------------------------------------------------------------------------------+
+| +-- IAM (global) ----------------------+  +-- CUSTOS --------------------------------------------------------+ |
+| | <span class="d-done">usuário formacao_aws + policies      </span>|  | <span class="d-done">Budget mensal (opcional) · sem NAT Gateway                       </span>| |
+| | <span class="d-done">role-acesso-ssm -&gt; EC2 (SSM, ECR...) </span>|  | cobram por hora: EC2, RDS e IPv4 público                         | |
+| +--------------------------------------+  +------------------------------------------------------------------+ |
+| +-- REGIÃO us-east-1 (N. Virginia) --------------------------------------------------------------------------+ |
+| | <span class="d-done">+-- SSM Session Manager -+ +-- ECR -----------------+ +-- S3 ------------------+ +-- ECS (controle) -----+ </span>| |
+| | <span class="d-done">| sessões na bia-dev     | | repositório bia        | | bucket site estático   | | cluster-bia           | </span>| |
+| | <span class="d-done">| túneis do porteiro     | | imagem :latest         | | index.html + assets    | | service + task-def    | </span>| |
+| | <span class="d-done">+------------------------+ +------------------------+ +------------------------+ +-----------------------+ </span>| |
+| | +-- VPC default · 172.31.0.0/16 (já existe) -------------------------------------------------------------+ | |
+| | | [ IGW default ]  todas as subnets default são públicas                                                 | | |
+| | | +-- AZ us-east-1a --------------------------------+  +-- AZ us-east-1b ------------------------------+ | | |
+| | | | +-- SUBNET DEFAULT 1a ------------------------+ |  | +-- SUBNET DEFAULT 1b ----------------------+ | | | |
+| | | | | <span class="d-done">+-- EC2 bia-dev ----+  +-- EC2 cluster-bia +</span>| |  | | <span class="d-done">+-- EC2 porteiro-bia -----+               </span>| | | | |
+| | | | | <span class="d-done">| SG bia-dev :3001  |  | SG bia-web :80    |</span>| |  | | <span class="d-done">| SG bia-porteiro         |               </span>| | | | |
+| | | | | <span class="d-done">| role-acesso-ssm   |  | ASG + Launch Tmpl |</span>| |  | | <span class="d-done">| sem porta de entrada    |               </span>| | | | |
+| | | | | <span class="d-done">| docker: BIA :3001 |  | task bia          |</span>| |  | | <span class="d-done">| role-acesso-ssm         |               </span>| | | | |
+| | | | | <span class="d-done">| git · Kiro-CLI    |  | 80 -&gt; 8080        |</span>| |  | | <span class="d-done">| túnel -&gt; RDS :5432      |               </span>| | | | |
+| | | | | <span class="d-done">| build/deploy.sh   |  | API + front       |</span>| |  | | <span class="d-done">| túnel -&gt; BIA :80        |               </span>| | | | |
+| | | | | <span class="d-done">| migrations -&gt; RDS |  | pull ECR :latest  |</span>| |  | | <span class="d-done">+-------------------------+               </span>| | | | |
+| | | | | <span class="d-done">+-------------------+  +-------------------+</span>| |  | |                                           | | | | |
+| | | | |                                             | |  | | <span class="d-done">zona b · subnet default                   </span>| | | | |
+| | | | |                                             | |  | |                                           | | | | |
+| | | | |                                             | |  | |                                           | | | | |
+| | | | | <span class="d-done">+-- RDS bia · PostgreSQL (público) --------+</span>| |  | |                                           | | | | |
+| | | | | <span class="d-done">| SG bia-db :5432 &lt;- bia-web, bia-dev      |</span>| |  | |                                           | | | | |
+| | | | | <span class="d-done">|                 &lt;- bia-porteiro          |</span>| |  | |                                           | | | | |
+| | | | | <span class="d-done">| database bia · tabela "Tarefas"          |</span>| |  | |                                           | | | | |
+| | | | | <span class="d-done">|                                          |</span>| |  | |                                           | | | | |
+| | | | | <span class="d-done">+------------------------------------------+</span>| |  | |                                           | | | | |
+| | | | |                                             | |  | |                                           | | | | |
+| | | | +---------------------------------------------+ |  | +-------------------------------------------+ | | | |
+| | | +-------------------------------------------------+  +-----------------------------------------------+ | | |
+| | +--------------------------------------------------------------------------------------------------------+ | |
+| +------------------------------------------------------------------------------------------------------------+ |
++----------------------------------------------------------------------------------------------------------------+
+</pre><div class="arch-leg"><span class="d-done">■ tudo o que os quatro desafios construíram</span></div><div class="arch-cap">Os desafios e onde este se encaixa</div><pre class="arch-ch">
+Desafios da Fase: Fundamentais
+
+<span class="d-done">Desafio 1 (Parte 2) — fazer os desafios do dia 1 e 2 da bia da sua VM</span>
+<span class="d-done">  DIA 1</span>
+<span class="d-done">    • Lançar máquina bia-dev (rodar a BIA na sua VM)</span>
+<span class="d-done">    • Configurar permissões IAM para o usuário ao invés da role</span>
+<span class="d-done">    • Testar comunicação com o ECR</span>
+<span class="d-done">  DIA 2</span>
+<span class="d-done">    • Fazer build da sua VM</span>
+<span class="d-done">    • Fazer push para o ECR da sua VM</span>
+
+<span class="d-done">Desafio 3</span>
+<span class="d-done">    • Criar um bucket para servir o site da bia de forma estática</span>
+<span class="d-done">    • Criar um script Shell para gerar os assets do react da BIA</span>
+<span class="d-done">        o O endereço da api deve ser passado por argumento</span>
+<span class="d-done">    • Fazer um sync do seu diretório local com o bucket no s3</span>
+<span class="d-done">    • Rodar o desafio da BIA no dia 2 para servir como API para o projeto do S3</span>
+<span class="d-done">    • Salvar um registro em banco por esse site</span>
+
+<span class="d-done">Desafio 4</span>
+<span class="d-done">    • Crie script que lance o porteiro na zona b (subnet default)</span>
+<span class="d-done">    • Crie script que inicie o porteiro com túnel para o RDS na porta local 5433</span>
+<span class="d-done">        o Estabeleça comunicação, insira 1 registro manualmente no banco</span>
+<span class="d-done">    • Crie túnel para bia e conecte nela na porta 3002 para ver o registro que foi adicionado</span>
+<span class="d-done">    • Crie script que para a máquina do porteiro</span>
+
+<span class="d-done">Desafios da Fase: Preparatórios (Desafio 1)</span>
+<span class="d-done">    • Print da BIA rodando na porta 80 na AWS com seu email cadastrado e texto do botão alterado</span>
+<span class="d-done">    • Diagnóstico do KIRO-CLI que nosso projeto está rodando corretamente no ECS</span>
+</pre></div>
+
+    <!-- ================================================================ F16 -->
+    <section class="phase" id="p16" data-group="Encerramento" data-title="Pausar tudo">
+      <div class="phase-head">
+        <span class="phase-n">FASE 16</span>
+        <div>
+          <h2>Pausar o que cobra por hora</h2>
+          <p>Service → ASG → RDS → <code>bia-dev</code>. O porteiro já foi parado pelo <code>04</code>.</p>
+        </div>
+        <span class="phase-count" data-count-for="p16"></span>
+      </div>
+
+      <div class="step" id="passo-16-1">
+        <div class="step-top"><a class="step-id" href="#passo-16-1">16.1</a><h3>Parar na ordem certa</h3><span class="where w-wsl">WSL</span></div>
+        <div class="cmd"><span class="cmd-label">Comando</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>source ~/DESAFIO1/desafio1.sh
+<span class="p">$ </span>aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" --desired-count 0 --query 'service.desiredCount' --output text
+<span class="p">$ </span>ASG=$(aws autoscaling describe-auto-scaling-groups \
+  --query "AutoScalingGroups[?contains(AutoScalingGroupName,'cluster-bia')].AutoScalingGroupName | [0]" --output text); echo "$ASG"
+<span class="p">$ </span>aws autoscaling update-auto-scaling-group --auto-scaling-group-name "$ASG" --min-size 0 --desired-capacity 0
+<span class="p">$ </span>aws rds stop-db-instance --db-instance-identifier "$RDS_ID" --query 'DBInstance.DBInstanceStatus' --output text
+<span class="p">$ </span>BIA_DEV_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=$BIA_DEV" "Name=instance-state-name,Values=running" --query 'Reservations[0].Instances[0].InstanceId' --output text)
+<span class="p">$ </span>aws ec2 stop-instances --instance-ids "$BIA_DEV_ID" --query 'StoppingInstances[0].CurrentState.Name' --output text</pre></div>
+        <div class="note n-warn"><b>Atenção</b><p>O <code>aws autoscaling</code> precisa de permissão de Auto Scaling, que o <code>AmazonEC2FullAccess</code> inclui. Confira o nome do ASG no <code>echo</code> (vem do stack do Console, <b>a confirmar</b>). Parar só a EC2 do cluster não adianta: o ASG sobe outra. O RDS parado <b>religa sozinho após 7 dias</b>. Ao religar, os IPs mudam, e é preciso refazer o 10.2 e o deploy do S3 (13.2).</p></div>
+        <div class="check"><div class="check-label">Checklist</div><ul>
+          <li><label><input type="checkbox"><span>Nenhuma EC2 running e o RDS <code>stopping</code>/<code>stopped</code></span></label></li>
+        </ul></div>
+      </div>
+    </section>
+
+    <!-- ================================================================ ANEXO A -->
+    <section class="phase" id="p-anexo-a" data-group="Anexos" data-title="Apagar tudo">
+      <div class="phase-head">
+        <span class="phase-n">ANEXO A</span>
+        <div>
+          <h2>Apagar tudo para recomeçar do zero</h2>
+          <p>Ordem de dependência. O cluster é apagado pelo Console porque isso também remove o stack do CloudFormation dele.</p>
+        </div>
+      </div>
+      <div class="step" id="passo-a-1">
+        <div class="step-top"><a class="step-id" href="#passo-a-1">A.1</a><h3>Sequência</h3><span class="where w-wsl">WSL + CONSOLE</span></div>
+        <div class="cmd"><span class="cmd-label">WSL</span><button class="copy" type="button">copiar</button><pre><span class="p">$ </span>aws ecs delete-service --cluster "$CLUSTER" --service "$SERVICE" --force
+<span class="p">$ </span>for r in $(aws ecs list-task-definitions --family-prefix "$TASK_FAMILY" --query 'taskDefinitionArns[]' --output text); do
+  aws ecs deregister-task-definition --task-definition "$r" &gt; /dev/null; done
+<span class="p">$ </span>IDS=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=$BIA_DEV,$PORTEIRO" "Name=instance-state-name,Values=pending,running,stopping,stopped" --query 'Reservations[].Instances[].InstanceId' --output text)
+<span class="p">$ </span>[ -n "$IDS" ] &amp;&amp; aws ec2 terminate-instances --instance-ids $IDS &gt; /dev/null
+<span class="p">$ </span>aws rds delete-db-instance --db-instance-identifier "$RDS_ID" --skip-final-snapshot --delete-automated-backups
+<span class="p">$ </span>aws s3 rb "s3://$BUCKET_NAME" --force
+<span class="p">$ </span>aws ecr delete-repository --repository-name "$ECR_REPO" --force</pre></div>
+        <div class="out clicks"><span class="out-label">Console (administrador) — depois que EC2 e RDS sumirem</span><pre>ECS  &gt;  Clusters  &gt;  cluster-bia  &gt;  Delete cluster   (leva o stack: ASG, Launch Template, EC2)
+EC2  &gt;  Security Groups  &gt;  bia-porteiro, bia-db, bia-web, bia-dev  &gt;  Delete
+      (se reclamar de referência: remova antes as regras do bia-db que apontam para os outros)
+IAM  &gt;  Roles  &gt;  role-acesso-ssm (e ecsInstanceRole, se quiser)  &gt;  Delete
+(opcional) IAM  &gt;  Users  &gt;  formacao_aws  &gt;  Delete  ·  GitHub: remover a chave "bia-dev"</pre></div>
+        <p>A VPC default fica. Ela é da conta e não cobra.</p>
+      </div>
+    </section>
+
+    <!-- ================================================================ ANEXO B -->
+    <section class="phase" id="p-erros" data-group="Anexos" data-title="Erros e a confirmar">
+      <div class="phase-head">
+        <span class="phase-n">ANEXO B</span>
+        <div>
+          <h2>Quando der errado, e o que ainda está a confirmar</h2>
+          <p>A tabela completa, com explicações, está no Anexo C do guia híbrido.</p>
+        </div>
+      </div>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Sintoma</th><th>Correção</th></tr></thead>
+        <tbody>
+          <tr><td><code>ExpiredToken</code></td><td><code>aws login --profile formacao_aws</code></td></tr>
+          <tr><td><code>AccessDenied</code> / <code>UnauthorizedOperation</code> no WSL</td><td>Permissão ainda não dada (F1, F2, F8, F12) ou falta o <code>source ~/DESAFIO1/desafio1.sh</code></td></tr>
+          <tr><td><code>iam:PassRole</code> no lançamento</td><td>Inline <code>PermissaoScriptsIAM</code> (2.2)</td></tr>
+          <tr><td><code>$'\r': command not found</code></td><td><code>sed -i 's/\r$//' *.sh</code></td></tr>
+          <tr><td><code>InvalidGroup.Duplicate</code></td><td>O SG já existe: pegue o ID com <code>describe-security-groups --filters Name=group-name,Values=...</code></td></tr>
+          <tr><td>SSM <code>None</code></td><td>Espere o user data; confira a role e o IP público</td></tr>
+          <tr><td><code>You must specify a region</code> na <code>bia-dev</code></td><td><code>--region us-east-1</code></td></tr>
+          <tr><td>Task PENDING</td><td><code>minimumHealthyPercent=0</code>; cluster com 1 instância</td></tr>
+          <tr><td>Tela sem tarefas (ECS ou S3)</td><td>IP velho no build: 10.2 (ECS) ou <code>./deploy.sh hom http://&lt;IP_NOVO&gt;</code> (S3)</td></tr>
+          <tr><td>Site do S3 com 403</td><td>Use o endpoint <code>s3-website</code>; confira o 12.2</td></tr>
+          <tr><td><code>psql</code> em timeout</td><td>Regra do <code>bia-porteiro</code> no <code>bia-db</code> (14.2)</td></tr>
+          <tr><td><code>relation "tarefas" does not exist</code></td><td>Aspas duplas: <code>"Tarefas"</code></td></tr>
+        </tbody>
+      </table></div>
+      <div class="note n-warn"><b>A confirmar</b><p>Comandos de instalação e login do Kiro-CLI · a troca do agente pela variante com MCP · a versão do PostgreSQL (18.3-R2 × 16.3) · o nome do ASG criado pelo Console · leitura de logs do CloudWatch pelo Kiro (este JSON de task definition não configura logs, e nenhuma policy de Logs foi dada).</p></div>
+      <div class="note n-tip"><b>Opcional: deploy versionado + rollback</b><p>A aula (Parte 8) pede ao Kiro um <code>deploy-com-ia.sh</code> com tag pelo short commit hash e rollback por revisão da task definition. Ver o Anexo A do guia híbrido.</p></div>
+    </section>
+
+  </main>
+</div>
+
+<footer>
+  <p>Pipeline pelo terminal dos Desafios 1 (Parte 2), 1, 3 e 4 — Desafio Labs 3.0 · Imersão AWS &amp; IA e Desafios Fundamentais.</p>
+  <p>Baseado em <span class="mono">Aula Desafio 1.txt</span>, <span class="mono">Desafios/Desafio 2.txt</span>, <span class="mono">Desafio 3.txt</span>, <span class="mono">Desafio 4.txt</span>, nos scripts de <span class="mono">Desafios/</span> e no projeto <span class="mono">bia/</span>. Conceitos e Console passo a passo: <span class="mono">guia-desafio-preparatorio-1-hibrido.html</span>.</p>
+  <p>Contas, IDs, IPs, endpoints, senhas e e-mails aparecem como placeholders (<span class="mono">&lt;...&gt;</span>) ou mascarados como <span class="mono">xxxx</span>.</p>
+</footer>
+<script>
+(function () {
+  var STORE = "desafio1-guia-v1";
+  var sections = Array.prototype.slice.call(document.querySelectorAll("section.phase"));
+
+  function load() {
+    try { return JSON.parse(localStorage.getItem(STORE) || "{}"); }
+    catch (e) { return {}; }
+  }
+  function save(state) {
+    try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {}
+  }
+
+  var state = load();
+  var boxes = [];
+
+  sections.forEach(function (sec) {
+    var list = Array.prototype.slice.call(sec.querySelectorAll('input[type="checkbox"]'));
+    list.forEach(function (box, i) {
+      box.dataset.k = sec.id + ":" + i;
+      if (state[box.dataset.k]) { box.checked = true; }
+      box.addEventListener("change", function () {
+        state[box.dataset.k] = box.checked;
+        save(state);
+        render();
+      });
+      boxes.push(box);
+    });
+  });
+
+  /* ---- sumario ---- */
+  var toc = document.getElementById("toc");
+  var links = {};
+  var lastGroup = null;
+  sections.forEach(function (sec) {
+    var badge = sec.querySelector(".phase-n");
+    var raw = badge ? badge.textContent.trim() : "";
+    var short = /^FASE/i.test(raw) ? "F" + raw.replace(/\D/g, "") : raw.slice(0, 4);
+    if (sec.dataset.group && sec.dataset.group !== lastGroup) {
+      var g = document.createElement("div");
+      g.className = "toc-group";
+      g.textContent = sec.dataset.group;
+      toc.appendChild(g);
+      lastGroup = sec.dataset.group;
+    }
+    var a = document.createElement("a");
+    a.href = "#" + sec.id;
+    a.innerHTML = "<b>" + short + "</b><span>" + (sec.dataset.title || "") + "</span>";
+    toc.appendChild(a);
+    links[sec.id] = a;
+  });
+
+  /* ---- progresso ---- */
+  var fill = document.getElementById("progFill");
+  var num = document.getElementById("progNum");
+
+  function render() {
+    var done = boxes.filter(function (b) { return b.checked; }).length;
+    var pct = boxes.length ? Math.round((done / boxes.length) * 100) : 0;
+    fill.style.width = pct + "%";
+    num.textContent = done + " / " + boxes.length;
+
+    sections.forEach(function (sec) {
+      var list = Array.prototype.slice.call(sec.querySelectorAll('input[type="checkbox"]'));
+      var ok = list.filter(function (b) { return b.checked; }).length;
+      var counter = sec.querySelector("[data-count-for]");
+      if (counter && list.length) {
+        counter.textContent = ok + "/" + list.length;
+        counter.classList.toggle("full", ok === list.length);
+      }
+      var link = links[sec.id];
+      if (link) { link.classList.toggle("done", list.length > 0 && ok === list.length); }
+    });
+  }
+
+  document.getElementById("reset").addEventListener("click", function () {
+    if (!window.confirm("Desmarcar todos os itens do checklist?")) { return; }
+    state = {};
+    save(state);
+    boxes.forEach(function (b) { b.checked = false; });
+    render();
+  });
+
+  /* ---- copiar comandos ---- */
+  Array.prototype.forEach.call(document.querySelectorAll(".copy"), function (btn) {
+    btn.addEventListener("click", function () {
+      var pre = btn.parentNode.querySelector("pre");
+      if (!pre) { return; }
+      var text = Array.prototype.map.call(pre.childNodes, function (n) {
+        if (n.nodeType === 1 && n.classList.contains("p")) { return ""; }
+        return n.textContent;
+      }).join("");
+
+      var done = function () {
+        btn.textContent = "copiado";
+        btn.classList.add("ok");
+        setTimeout(function () { btn.textContent = "copiar"; btn.classList.remove("ok"); }, 1600);
+      };
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () { fallback(text, done); });
+      } else {
+        fallback(text, done);
+      }
+    });
+  });
+
+  function fallback(text, done) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); done(); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+
+  /* ---- secao ativa ---- */
+  if ("IntersectionObserver" in window) {
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (en.isIntersecting) {
+          Object.keys(links).forEach(function (id) { links[id].classList.remove("on"); });
+          if (links[en.target.id]) { links[en.target.id].classList.add("on"); }
+        }
+      });
+    }, { rootMargin: "-80px 0px -70% 0px" });
+    sections.forEach(function (s) { obs.observe(s); });
+  }
+
+  /* ---- tema: interruptor claro <-> escuro ----
+     Dois estados, e nao tres. Um estado "auto" renderiza igual ao tema que o
+     sistema ja usa, entao um dos cliques do ciclo nao mudaria nada na tela --
+     parece um botao quebrado. Aqui todo clique inverte. O sistema ainda e
+     respeitado: ele decide o estado inicial de quem nunca escolheu. */
+  var TEMA_STORE = "desafio1-guia-tema";   /* chave propria: "Limpar progresso" nao apaga o tema */
+  var btnTema = document.getElementById("tema");
+
+  function sistemaEscuro() {
+    try { return window.matchMedia("(prefers-color-scheme: dark)").matches; }
+    catch (e) { return false; }
+  }
+  function lerTema() {
+    try {
+      var t = localStorage.getItem(TEMA_STORE);
+      if (t === "light" || t === "dark") { return t; }
+    } catch (e) {}
+    return sistemaEscuro() ? "dark" : "light";
+  }
+  function aplicarTema(t, gravar) {
+    document.documentElement.setAttribute("data-theme", t);
+    if (btnTema) {
+      btnTema.textContent = (t === "dark") ? "Tema: escuro" : "Tema: claro";
+      btnTema.setAttribute("aria-label", (t === "dark")
+        ? "Tema escuro. Clique para mudar para o tema claro."
+        : "Tema claro. Clique para mudar para o tema escuro.");
+    }
+    if (gravar) {
+      try { localStorage.setItem(TEMA_STORE, t); } catch (e) {}
+    }
+  }
+  if (btnTema) {
+    aplicarTema(lerTema(), false);
+    btnTema.addEventListener("click", function () {
+      var atual = document.documentElement.getAttribute("data-theme");
+      aplicarTema(atual === "dark" ? "light" : "dark", true);
+    });
+  }
+
+  /* ---- impressao: abre os blocos recolhiveis e devolve o estado depois ---- */
+  var recolhidos = [];
+  window.addEventListener("beforeprint", function () {
+    recolhidos = Array.prototype.filter.call(
+      document.querySelectorAll("details"),
+      function (d) { return !d.open; }
+    );
+    recolhidos.forEach(function (d) { d.open = true; });
+  });
+  window.addEventListener("afterprint", function () {
+    recolhidos.forEach(function (d) { d.open = false; });
+    recolhidos = [];
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
